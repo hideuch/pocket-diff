@@ -16,48 +16,52 @@ function securityHeaders(_request, response, next) {
   next();
 }
 
-export async function createApp({ catalog, development = false }) {
+export async function createApp({ catalog, development = false, basePath = "" }) {
   const app = express();
   app.disable("x-powered-by");
   app.use(securityHeaders);
 
-  app.get("/api/health", (_request, response) => {
-    response.json({ ok: true });
-  });
+  const routePrefixes = [...new Set(["", basePath])];
 
-  app.get("/api/repos", async (request, response) => {
-    response.setHeader("Cache-Control", "private, no-cache");
-    try {
-      const repositories = await catalog.publicList({ force: request.query.refresh === "1" });
-      response.json({ repositories });
-    } catch (error) {
-      response.status(422).json({ error: "リポジトリを検索できませんでした", detail: error.message });
-    }
-  });
+  for (const prefix of routePrefixes) {
+    app.get(`${prefix}/api/health`, (_request, response) => {
+      response.json({ ok: true });
+    });
 
-  app.get("/api/diff", async (request, response) => {
-    response.setHeader("Cache-Control", "private, no-cache");
-    try {
-      const repoPath = await catalog.resolve(request.query.repo);
-      if (!repoPath) {
-        response.status(404).json({ error: "リポジトリが見つかりません", detail: "一覧から選び直してください" });
-        return;
+    app.get(`${prefix}/api/repos`, async (request, response) => {
+      response.setHeader("Cache-Control", "private, no-cache");
+      try {
+        const repositories = await catalog.publicList({ force: request.query.refresh === "1" });
+        response.json({ repositories });
+      } catch (error) {
+        response.status(422).json({ error: "リポジトリを検索できませんでした", detail: error.message });
       }
-      const data = await collectDiff(repoPath);
-      const etag = `\"${data.revision}\"`;
-      response.setHeader("ETag", etag);
-      if (request.headers["if-none-match"] === etag) {
-        response.status(304).end();
-        return;
+    });
+
+    app.get(`${prefix}/api/diff`, async (request, response) => {
+      response.setHeader("Cache-Control", "private, no-cache");
+      try {
+        const repoPath = await catalog.resolve(request.query.repo);
+        if (!repoPath) {
+          response.status(404).json({ error: "リポジトリが見つかりません", detail: "一覧から選び直してください" });
+          return;
+        }
+        const data = await collectDiff(repoPath);
+        const etag = `\"${data.revision}\"`;
+        response.setHeader("ETag", etag);
+        if (request.headers["if-none-match"] === etag) {
+          response.status(304).end();
+          return;
+        }
+        response.json(data);
+      } catch (error) {
+        response.status(422).json({
+          error: "差分を読み込めませんでした",
+          detail: error.stderr?.trim() || error.message,
+        });
       }
-      response.json(data);
-    } catch (error) {
-      response.status(422).json({
-        error: "差分を読み込めませんでした",
-        detail: error.stderr?.trim() || error.message,
-      });
-    }
-  });
+    });
+  }
 
   if (development) {
     const { createServer } = await import("vite");
@@ -65,6 +69,11 @@ export async function createApp({ catalog, development = false }) {
     app.use(vite.middlewares);
   } else {
     const dist = path.resolve(here, "../dist");
+    if (basePath) {
+      app.get(basePath, (_request, response) => response.redirect(308, `${basePath}/`));
+      app.use(basePath, express.static(dist, { index: false, maxAge: "1h" }));
+      app.get(`${basePath}/{*splat}`, (_request, response) => response.sendFile(path.join(dist, "index.html")));
+    }
     app.use(express.static(dist, { index: false, maxAge: "1h" }));
     app.get("/{*splat}", (_request, response) => response.sendFile(path.join(dist, "index.html")));
   }

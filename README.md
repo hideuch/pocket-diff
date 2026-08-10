@@ -58,6 +58,16 @@ tailscale serve status
 tailscale serve --bg --https=8443 http://127.0.0.1:4173
 ```
 
+ポート番号なしのサブパスで公開する場合は、同じパスをビルド、サーバー、Tailscale Serveへ指定します。
+
+```bash
+npm run build -- --base=/diff/
+npm start -- --root /path/to/projects --base-path /diff
+tailscale serve --bg --set-path=/diff http://127.0.0.1:4173
+```
+
+アクセスURLは `https://<device-name>.<tailnet-name>.ts.net/diff/` です。末尾の `/` も含めてください。
+
 停止する場合：
 
 ```bash

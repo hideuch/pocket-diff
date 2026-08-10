@@ -30,6 +30,7 @@ function unique(values) {
 export function parseServerOptions(argv = process.argv.slice(2), env = process.env) {
   const roots = [];
   let maxDepth = Number.parseInt(env.DIFF_SCAN_DEPTH || String(DEFAULT_DEPTH), 10);
+  let basePath = env.POCKET_DIFF_BASE_PATH || "";
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -37,6 +38,8 @@ export function parseServerOptions(argv = process.argv.slice(2), env = process.e
     else if (argument.startsWith("--root=")) roots.push(argument.slice("--root=".length));
     else if (argument === "--depth" && argv[index + 1]) maxDepth = Number.parseInt(argv[++index], 10);
     else if (argument.startsWith("--depth=")) maxDepth = Number.parseInt(argument.slice("--depth=".length), 10);
+    else if (argument === "--base-path" && argv[index + 1]) basePath = argv[++index];
+    else if (argument.startsWith("--base-path=")) basePath = argument.slice("--base-path=".length);
   }
 
   if (roots.length === 0 && env.DIFF_ROOTS) roots.push(...env.DIFF_ROOTS.split(path.delimiter));
@@ -46,6 +49,7 @@ export function parseServerOptions(argv = process.argv.slice(2), env = process.e
   return {
     roots: unique(roots.filter(Boolean).map((root) => path.resolve(root))),
     maxDepth: Number.isFinite(maxDepth) ? Math.max(0, Math.min(maxDepth, 8)) : DEFAULT_DEPTH,
+    basePath: basePath && basePath !== "/" ? `/${basePath.replace(/^\/+|\/+$/g, "")}` : "",
   };
 }
 

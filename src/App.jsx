@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const REFRESH_MS = 3000;
 const LAST_REPO_KEY = "pocket-diff:last-repository";
+const API_BASE = `${import.meta.env.BASE_URL}api`;
 
 function Icon({ name, size = 18 }) {
   const paths = {
@@ -104,7 +105,7 @@ export function App() {
 
   const loadRepositories = useCallback(async ({ refresh = false } = {}) => {
     try {
-      const response = await fetch(`/api/repos${refresh ? "?refresh=1" : ""}`, { cache: "no-cache" });
+      const response = await fetch(`${API_BASE}/repos${refresh ? "?refresh=1" : ""}`, { cache: "no-cache" });
       const result = await response.json();
       if (!response.ok) throw new Error(result.detail || result.error);
       setRepositories(result.repositories);
@@ -128,7 +129,7 @@ export function App() {
     if (!activeRepoId) return;
     if (!quiet) setRefreshing(true);
     try {
-      const response = await fetch(`/api/diff?repo=${encodeURIComponent(activeRepoId)}`, {
+      const response = await fetch(`${API_BASE}/diff?repo=${encodeURIComponent(activeRepoId)}`, {
         cache: "no-cache",
         headers: revisionRef.current ? { "If-None-Match": `\"${revisionRef.current}\"` } : {},
       });

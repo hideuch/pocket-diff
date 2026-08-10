@@ -20,10 +20,11 @@ async function createRepository(directory, { dirty = false } = {}) {
   if (dirty) await writeFile(path.join(directory, "change.js"), "export const changed = true;\n");
 }
 
-test("parseServerOptions accepts repeatable portable roots and clamps depth", () => {
-  const options = parseServerOptions(["--root", "./one", "--root=./two", "--depth=99"], {});
+test("parseServerOptions accepts portable roots, base path, and clamps depth", () => {
+  const options = parseServerOptions(["--root", "./one", "--root=./two", "--depth=99", "--base-path=/diff/"], {});
   assert.deepEqual(options.roots, [path.resolve("./one"), path.resolve("./two")]);
   assert.equal(options.maxDepth, 8);
+  assert.equal(options.basePath, "/diff");
 });
 
 test("status parser counts a rename as one change", () => {
