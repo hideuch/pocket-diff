@@ -227,34 +227,105 @@ button:focus-visible {
 
 .file-rail {
   display: flex;
-  gap: 8px;
+  align-items: stretch;
+  gap: 10px;
   overflow-x: auto;
   padding: 0 18px 13px;
   scroll-padding: 18px;
+  scroll-snap-type: x proximity;
   scrollbar-width: none;
 }
 .file-rail::-webkit-scrollbar {
   display: none;
 }
-.file-pill {
+.folder-group {
   flex: 0 0 auto;
-  height: 38px;
-  max-width: 200px;
-  padding: 0 11px;
+  min-width: 148px;
+  max-width: min(82vw, 420px);
+  padding: 6px;
+  overflow: hidden;
+  border: 1px solid #d3dce8;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 4px 14px rgba(35, 52, 75, 0.035);
+  scroll-snap-align: start;
+}
+.folder-group-heading {
+  height: 24px;
+  min-width: 0;
+  padding: 0 5px 5px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  gap: 5px;
+  color: #526176;
+  border-bottom: 1px solid #e1e7ef;
+}
+.folder-group-heading svg {
+  flex: 0 0 auto;
+  color: var(--violet);
+}
+.folder-path {
+  min-width: 0;
+  overflow: hidden;
+  font:
+    600 9px/1.2 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.folder-path span {
+  color: #8a95a6;
+  font-weight: 500;
+}
+.folder-path strong {
+  color: #3b485a;
+  font-weight: 800;
+}
+.folder-group-heading small {
+  min-width: 17px;
+  height: 17px;
+  margin-left: auto;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  border-radius: 99px;
+  color: #696b94;
+  background: #eeedfa;
+  font:
+    700 8px/1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.folder-files {
+  display: flex;
+  gap: 4px;
+  padding-top: 5px;
+}
+.file-pill {
+  flex: 0 0 auto;
+  height: 36px;
+  max-width: 180px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 9px;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.72);
+  background: transparent;
   cursor: pointer;
+}
+.file-pill:active {
+  background: #edf1f6;
 }
 .file-pill.is-selected {
   border-color: #9daae8;
   color: var(--ink);
   background: var(--blue-soft);
-  box-shadow: inset 0 0 0 1px rgba(54, 89, 217, 0.08);
+  box-shadow: 0 2px 8px rgba(54, 89, 217, 0.09);
 }
 .file-pill-name {
   overflow: hidden;
