@@ -12,6 +12,10 @@ const iconPaths = {
   check: <path d="m5 12 4 4L19 6" />,
   document: <path d="M7 3h7l4 4v14H7zM14 3v5h5M10 12h5M10 16h5" />,
   comment: <path d="M5 5h14v10H9l-4 4zM8 9h8M8 12h5" />,
+  palette: (
+    <path d="M12 3a9 9 0 1 0 0 18h1.5a2 2 0 0 0 0-4H12a2 2 0 0 1 0-4h3a6 6 0 0 0 0-12zM7.5 10h.01M9 6.5h.01M14 6h.01M17.5 9h.01" />
+  ),
+  trash: <path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" />,
   wrap: <path d="M4 6h16M4 11h12a4 4 0 0 1 0 8h-1M15 16l-3 3 3 3M4 19h5" />,
   chevron: <path d="m9 18 6-6-6-6" />,
   arrow: <path d="m15 18-6-6 6-6" />,

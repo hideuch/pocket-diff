@@ -8,6 +8,7 @@ type AppHeaderProps = {
   isLoadingRepositories: boolean;
   refreshing: boolean;
   onOpenRepositoryPicker: () => void;
+  onOpenThemePicker: () => void;
   onRefresh: () => void;
 };
 
@@ -18,6 +19,7 @@ export function AppHeader({
   isLoadingRepositories,
   refreshing,
   onOpenRepositoryPicker,
+  onOpenThemePicker,
   onRefresh,
 }: AppHeaderProps) {
   return (
@@ -41,15 +43,20 @@ export function AppHeader({
           {activeRepository?.branch || (isLoadingRepositories ? "検索中" : "未選択")}
         </span>
       </button>
-      <button
-        className={`refresh-button ${refreshing ? "is-spinning" : ""}`}
-        onClick={onRefresh}
-        type="button"
-        aria-label="差分を更新"
-        disabled={!activeRepoId}
-      >
-        <Icon name="refresh" />
-      </button>
+      <div className="topbar-actions">
+        <button className="theme-button" onClick={onOpenThemePicker} type="button" aria-label="テーマを選ぶ">
+          <Icon name="palette" size={17} />
+        </button>
+        <button
+          className={`refresh-button ${refreshing ? "is-spinning" : ""}`}
+          onClick={onRefresh}
+          type="button"
+          aria-label="差分を更新"
+          disabled={!activeRepoId}
+        >
+          <Icon name="refresh" />
+        </button>
+      </div>
     </header>
   );
 }

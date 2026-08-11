@@ -16,6 +16,8 @@ import {
 type DiffPanelProps = {
   activeRepoId: string;
   branch: string;
+  codeTheme: "pierre-light" | "pierre-dark" | "github-light" | "github-dark" | "tokyo-night";
+  codeThemeType: "light" | "dark";
   expanded: boolean;
   file: FileDiffMetadata;
   index: number;
@@ -59,6 +61,8 @@ function isImageFile(name: string) {
 export function DiffPanel({
   activeRepoId,
   branch,
+  codeTheme,
+  codeThemeType,
   expanded,
   file,
   index,
@@ -111,7 +115,7 @@ export function DiffPanel({
       ) : file.type === "rename-pure" ? null : file.hunks.length === 0 ? (
         <EmptyFileNotice />
       ) : (
-        <div className="diff-frame" key={`${file.name}-${revision}-${wrapLines ? "wrap" : "scroll"}`}>
+        <div className="diff-frame" key={`${file.name}-${revision}-${wrapLines ? "wrap" : "scroll"}-${codeTheme}`}>
           <FileDiff
             lineAnnotations={diffAnnotations}
             selectedLines={selectedLines}
@@ -128,8 +132,8 @@ export function DiffPanel({
               hunkSeparators: "line-info-basic",
               disableFileHeader: true,
               stickyHeader: false,
-              theme: "pierre-light",
-              themeType: "light",
+              theme: codeTheme,
+              themeType: codeThemeType,
               controlledSelection: true,
               lineHoverHighlight: "number",
               unsafeCSS: LINE_NUMBER_INTERACTION_CSS,
@@ -143,6 +147,8 @@ export function DiffPanel({
   const body = fullFileView ? (
     <FullFileView
       activeRepoId={activeRepoId}
+      codeTheme={codeTheme}
+      codeThemeType={codeThemeType}
       comments={comments}
       file={file}
       revision={revision}
@@ -331,6 +337,8 @@ type FullFileState =
 
 function FullFileView({
   activeRepoId,
+  codeTheme,
+  codeThemeType,
   comments,
   file,
   revision,
@@ -340,6 +348,8 @@ function FullFileView({
   onSelectLine,
 }: {
   activeRepoId: string;
+  codeTheme: DiffPanelProps["codeTheme"];
+  codeThemeType: DiffPanelProps["codeThemeType"];
   comments: ReviewComment[];
   file: FileDiffMetadata;
   revision: string;
@@ -419,7 +429,7 @@ function FullFileView({
         <div className="full-file-empty">空のファイルです</div>
       ) : (
         <File
-          key={`${name}-${revision}-${wrapLines ? "wrap" : "scroll"}`}
+          key={`${name}-${revision}-${wrapLines ? "wrap" : "scroll"}-${codeTheme}`}
           className="full-file-code"
           disableWorkerPool
           file={{ name, contents: state.data.content }}
@@ -433,8 +443,8 @@ function FullFileView({
             disableLineNumbers: false,
             overflow: wrapLines ? "wrap" : "scroll",
             stickyHeader: false,
-            theme: "pierre-light",
-            themeType: "light",
+            theme: codeTheme,
+            themeType: codeThemeType,
             controlledSelection: true,
             lineHoverHighlight: "number",
             unsafeCSS: LINE_NUMBER_INTERACTION_CSS,

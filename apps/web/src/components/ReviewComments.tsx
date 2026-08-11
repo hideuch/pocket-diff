@@ -71,6 +71,22 @@ export function readBranchReviewComments(repoId: string, branch: string): Branch
   );
 }
 
+export function clearBranchReviewComments(repoId: string, branch: string) {
+  const branchPrefix = branchStoragePrefix(repoId, branch);
+  const legacyRepoPrefix = `${LEGACY_STORAGE_PREFIX}:${repoId}:`;
+  const keys: string[] = [];
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index);
+    if (key?.startsWith(branchPrefix) || key?.startsWith(legacyRepoPrefix)) keys.push(key);
+  }
+  try {
+    keys.forEach((key) => window.localStorage.removeItem(key));
+    notifyCommentsChanged();
+  } catch {
+    // Keep the current UI intact when browser storage is unavailable.
+  }
+}
+
 export function useBranchReviewComments(repoId: string, branch: string) {
   const [comments, setComments] = useState<BranchReviewComment[]>(() => readBranchReviewComments(repoId, branch));
 
@@ -133,17 +149,29 @@ export function useReviewComments(repoId: string, branch: string, path: string, 
 
   useEffect(() => {
     const stored = readComments(storageKey);
-    const merged = mergeComments(stored, readComments(legacyStorageKey));
+    const legacy = readComments(legacyStorageKey);
+    const merged = mergeComments(stored, legacy);
     setComments(merged);
-    if (merged.length > stored.length) {
+    if (legacy.length > 0) {
       try {
-        window.localStorage.setItem(storageKey, JSON.stringify(merged));
+        if (merged.length > stored.length) window.localStorage.setItem(storageKey, JSON.stringify(merged));
+        window.localStorage.removeItem(legacyStorageKey);
         notifyCommentsChanged();
       } catch {
         // Keep migrated comments available for this session when browser storage is unavailable.
       }
     }
   }, [legacyStorageKey, storageKey]);
+
+  useEffect(() => {
+    const refresh = () => setComments(readComments(storageKey));
+    window.addEventListener(COMMENTS_CHANGED_EVENT, refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener(COMMENTS_CHANGED_EVENT, refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, [storageKey]);
 
   const updateComments = useCallback(
     (update: (current: ReviewComment[]) => ReviewComment[]) => {

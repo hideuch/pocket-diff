@@ -1,9 +1,10 @@
 import type { FileDiffMetadata } from "@pierre/diffs";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DiffResponse } from "../types";
+import type { AppThemeDefinition } from "../themes";
 import { DiffPanel } from "./DiffPanel";
 import { FileRail } from "./FileRail";
-import { formatReviewCommentsForAgent, useBranchReviewComments } from "./ReviewComments";
+import { clearBranchReviewComments, formatReviewCommentsForAgent, useBranchReviewComments } from "./ReviewComments";
 import { Icon } from "./Icon";
 
 type DiffContentProps = {
@@ -11,6 +12,7 @@ type DiffContentProps = {
   data: DiffResponse;
   files: FileDiffMetadata[];
   selected: number;
+  theme: AppThemeDefinition;
   onSelect: (index: number) => void;
 };
 
@@ -31,11 +33,12 @@ function storedFileSet(key: string) {
   }
 }
 
-export function DiffContent({ activeRepoId, data, files, selected, onSelect }: DiffContentProps) {
+export function DiffContent({ activeRepoId, data, files, selected, theme, onSelect }: DiffContentProps) {
   const [noWrapFiles, setNoWrapFiles] = useState<Set<string>>(() => storedFileSet(NO_WRAP_FILES_KEY));
   const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(() => new Set());
   const [reviewFileKey, setReviewFileKey] = useState<string | null>(null);
   const [commentsCopied, setCommentsCopied] = useState(false);
+  const [confirmingCommentDelete, setConfirmingCommentDelete] = useState(false);
   const commentsCopyTimer = useRef<number | undefined>(undefined);
   const reviewComments = useBranchReviewComments(activeRepoId, data.branch);
   const selectedRef = useRef(selected);
@@ -48,6 +51,9 @@ export function DiffContent({ activeRepoId, data, files, selected, onSelect }: D
     : "—";
 
   useEffect(() => () => window.clearTimeout(commentsCopyTimer.current), []);
+  useEffect(() => {
+    if (reviewComments.length === 0) setConfirmingCommentDelete(false);
+  }, [reviewComments.length]);
 
   const copyReviewComments = async () => {
     if (reviewComments.length === 0) return;
@@ -65,6 +71,12 @@ export function DiffContent({ activeRepoId, data, files, selected, onSelect }: D
     } catch {
       setCommentsCopied(false);
     }
+  };
+
+  const deleteReviewComments = () => {
+    clearBranchReviewComments(activeRepoId, data.branch);
+    setConfirmingCommentDelete(false);
+    setCommentsCopied(false);
   };
 
   const toggleLineWrap = (fileKey: string) => {
@@ -134,6 +146,7 @@ export function DiffContent({ activeRepoId, data, files, selected, onSelect }: D
         reviewFileKey={reviewFileKey}
         selected={selected}
         selectedRef={selectedRef}
+        theme={theme}
         onActive={onSelect}
         onToggleFile={toggleFile}
         onToggleLineWrap={toggleLineWrap}
@@ -143,15 +156,43 @@ export function DiffContent({ activeRepoId, data, files, selected, onSelect }: D
       {reviewComments.length > 0 ? (
         <>
           <div className="review-export-clearance" aria-hidden="true" />
-          <button
-            aria-label={`${reviewComments.length}件のコメントをコピー`}
-            className={`review-export-bar ${commentsCopied ? "is-copied" : ""}`}
-            onClick={copyReviewComments}
-            type="button"
+          <div
+            aria-label="コメントの一括操作"
+            className={`review-export-bar ${commentsCopied ? "is-copied" : ""} ${confirmingCommentDelete ? "is-confirming-delete" : ""}`}
+            role="group"
           >
-            <Icon name={commentsCopied ? "check" : "copy"} size={14} />
-            <span>{commentsCopied ? "コピーしました" : `${reviewComments.length}件のコメントをコピー`}</span>
-          </button>
+            {confirmingCommentDelete ? (
+              <>
+                <span className="review-delete-prompt">{reviewComments.length}件をすべて削除しますか？</span>
+                <button onClick={() => setConfirmingCommentDelete(false)} type="button">
+                  キャンセル
+                </button>
+                <button className="review-delete-confirm" onClick={deleteReviewComments} type="button">
+                  削除
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  aria-label={`${reviewComments.length}件のコメントをコピー`}
+                  className="review-export-copy"
+                  onClick={copyReviewComments}
+                  type="button"
+                >
+                  <Icon name={commentsCopied ? "check" : "copy"} size={14} />
+                  <span>{commentsCopied ? "コピーしました" : `${reviewComments.length}件のコメントをコピー`}</span>
+                </button>
+                <button
+                  aria-label={`${reviewComments.length}件のコメントをすべて削除`}
+                  className="review-export-delete"
+                  onClick={() => setConfirmingCommentDelete(true)}
+                  type="button"
+                >
+                  <Icon name="trash" size={14} />
+                </button>
+              </>
+            )}
+          </div>
         </>
       ) : null}
     </>
@@ -168,6 +209,7 @@ function AllDiffs({
   reviewFileKey,
   selected,
   selectedRef,
+  theme,
   onActive,
   onToggleFile,
   onToggleLineWrap,
@@ -182,6 +224,7 @@ function AllDiffs({
   reviewFileKey: string | null;
   selected: number;
   selectedRef: { current: number };
+  theme: AppThemeDefinition;
   onActive: (index: number) => void;
   onToggleFile: (fileKey: string) => void;
   onToggleLineWrap: (fileKey: string) => void;
@@ -230,6 +273,8 @@ function AllDiffs({
             revision={data.revision}
             reviewActive={reviewFileKey === fileKey}
             total={files.length}
+            codeTheme={theme.codeTheme}
+            codeThemeType={theme.themeType}
             wrapLines={!noWrapFiles.has(fileKey)}
             onToggleExpanded={() => onToggleFile(fileKey)}
             onToggleLineWrap={() => onToggleLineWrap(fileKey)}
