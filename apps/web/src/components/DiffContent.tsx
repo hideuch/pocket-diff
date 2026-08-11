@@ -12,14 +12,25 @@ type DiffContentProps = {
   onSelect: (index: number) => void;
 };
 
-const LINE_WRAP_KEY = "pocket-diff:line-wrap";
+const NO_WRAP_FILES_KEY = "pocket-diff:no-wrap-files";
 
 function patchBlocks(patch: string) {
   return patch.split(/(?=^diff --git )/m).filter((block) => block.startsWith("diff --git "));
 }
 
+function storedFileSet(key: string) {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(key) || "[]");
+    return new Set<string>(
+      Array.isArray(stored) ? stored.filter((value): value is string => typeof value === "string") : [],
+    );
+  } catch {
+    return new Set<string>();
+  }
+}
+
 export function DiffContent({ activeRepoId, data, files, selected, onSelect }: DiffContentProps) {
-  const [wrapLines, setWrapLines] = useState(() => window.localStorage.getItem(LINE_WRAP_KEY) !== "scroll");
+  const [noWrapFiles, setNoWrapFiles] = useState<Set<string>>(() => storedFileSet(NO_WRAP_FILES_KEY));
   const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(() => new Set());
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
@@ -30,11 +41,13 @@ export function DiffContent({ activeRepoId, data, files, selected, onSelect }: D
       )
     : "—";
 
-  const toggleLineWrap = () => {
-    setWrapLines((currentValue) => {
-      const nextValue = !currentValue;
-      window.localStorage.setItem(LINE_WRAP_KEY, nextValue ? "wrap" : "scroll");
-      return nextValue;
+  const toggleLineWrap = (fileKey: string) => {
+    setNoWrapFiles((currentFiles) => {
+      const nextFiles = new Set(currentFiles);
+      if (nextFiles.has(fileKey)) nextFiles.delete(fileKey);
+      else nextFiles.add(fileKey);
+      window.localStorage.setItem(NO_WRAP_FILES_KEY, JSON.stringify([...nextFiles]));
+      return nextFiles;
     });
   };
 
@@ -91,9 +104,9 @@ export function DiffContent({ activeRepoId, data, files, selected, onSelect }: D
         collapsedFiles={collapsedFiles}
         data={data}
         files={files}
+        noWrapFiles={noWrapFiles}
         selected={selected}
         selectedRef={selectedRef}
-        wrapLines={wrapLines}
         onActive={onSelect}
         onToggleFile={toggleFile}
         onToggleLineWrap={toggleLineWrap}
@@ -108,9 +121,9 @@ function AllDiffs({
   collapsedFiles,
   data,
   files,
+  noWrapFiles,
   selected,
   selectedRef,
-  wrapLines,
   onActive,
   onToggleFile,
   onToggleLineWrap,
@@ -120,12 +133,12 @@ function AllDiffs({
   collapsedFiles: Set<string>;
   data: DiffResponse;
   files: FileDiffMetadata[];
+  noWrapFiles: Set<string>;
   selected: number;
   selectedRef: { current: number };
-  wrapLines: boolean;
   onActive: (index: number) => void;
   onToggleFile: (fileKey: string) => void;
-  onToggleLineWrap: () => void;
+  onToggleLineWrap: (fileKey: string) => void;
 }) {
   const container = useRef<HTMLElement>(null);
 
@@ -168,9 +181,9 @@ function AllDiffs({
             patchBlock={blocks[index] || ""}
             revision={data.revision}
             total={files.length}
-            wrapLines={wrapLines}
+            wrapLines={!noWrapFiles.has(fileKey)}
             onToggleExpanded={() => onToggleFile(fileKey)}
-            onToggleLineWrap={onToggleLineWrap}
+            onToggleLineWrap={() => onToggleLineWrap(fileKey)}
           />
         );
       })}
