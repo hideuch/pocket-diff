@@ -15,7 +15,7 @@ macOS、Linux、Windows向けの単一Goバイナリとして動作します。�
 GitHub Releaseから最新版を取得し、そのまま対話セットアップを開始します。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hidenariTakeuchi/pocket-diff/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/hideuch/pocket-diff/main/install.sh | sh
 ```
 
 対話形式で次の項目を設定します。
@@ -61,7 +61,7 @@ pocket-diff doctor
 - SHA-256ダイジェスト
 - Sigstore署名と証明書チェーン
 - Rekor透明性ログと署名時刻
-- 署名元が`hidenariTakeuchi/pocket-diff`の保護されたRelease workflowであること
+- 署名元が`hideuch/pocket-diff`の保護されたRelease workflowであること
 - 署名対象が該当する`v*`タグと公開リポジトリであること
 - 現在より新しいSemantic Versionであり、ダウングレードではないこと
 

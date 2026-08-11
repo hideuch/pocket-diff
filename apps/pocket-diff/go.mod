@@ -1,4 +1,4 @@
-module github.com/hidenariTakeuchi/pocket-diff/apps/pocket-diff
+module github.com/hideuch/pocket-diff/apps/pocket-diff
 
 go 1.25.8
 

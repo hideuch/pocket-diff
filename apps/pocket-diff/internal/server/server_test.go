@@ -7,7 +7,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/hidenariTakeuchi/pocket-diff/apps/pocket-diff/internal/catalog"
+	"github.com/hideuch/pocket-diff/apps/pocket-diff/internal/catalog"
 )
 
 func TestNormalizeBasePath(t *testing.T) {

@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	Repository       = "hidenariTakeuchi/pocket-diff"
+	Repository       = "hideuch/pocket-diff"
 	attestationAsset = "attestation.sigstore.json"
 	maxAssetSize     = 128 << 20
 )
