@@ -49,7 +49,9 @@ case ":$PATH:" in
   *) echo "Add $install_directory to PATH before using pocket-diff." ;;
 esac
 
-if [ -r /dev/tty ] && [ -w /dev/tty ]; then
+if [ "${POCKET_DIFF_NO_SETUP:-0}" = "1" ]; then
+  echo "Run: $install_directory/pocket-diff setup"
+elif [ -r /dev/tty ] && [ -w /dev/tty ]; then
   "$install_directory/pocket-diff" setup </dev/tty
 else
   echo "Run: $install_directory/pocket-diff setup"
