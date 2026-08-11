@@ -50,7 +50,9 @@ export function DiffPanel({
   onToggleLineWrap,
 }: DiffPanelProps) {
   const [bodyMounted, setBodyMounted] = useState(true);
+  const [pathCopied, setPathCopied] = useState(false);
   const collapseTimer = useRef<number | undefined>(undefined);
+  const copyTimer = useRef<number | undefined>(undefined);
   const isBinary = /^Binary files .+ differ$|^GIT binary patch$/m.test(patchBlock);
   const isImage = isImageFile(file.name);
   const isRename = file.type === "rename-pure" || file.type === "rename-changed";
@@ -97,7 +99,24 @@ export function DiffPanel({
     if (expanded) setBodyMounted(true);
   }, [expanded]);
 
-  useEffect(() => () => window.clearTimeout(collapseTimer.current), []);
+  useEffect(
+    () => () => {
+      window.clearTimeout(collapseTimer.current);
+      window.clearTimeout(copyTimer.current);
+    },
+    [],
+  );
+
+  const copyPath = async () => {
+    try {
+      await copyText(file.name);
+      setPathCopied(true);
+      window.clearTimeout(copyTimer.current);
+      copyTimer.current = window.setTimeout(() => setPathCopied(false), 1600);
+    } catch {
+      setPathCopied(false);
+    }
+  };
 
   const toggleExpanded = () => {
     window.clearTimeout(collapseTimer.current);
@@ -129,6 +148,15 @@ export function DiffPanel({
             {index + 1}/{total}
           </span>
           <span className="change-label">{file.type}</span>
+          <button
+            aria-label={pathCopied ? `${file.name}をコピーしました` : `${file.name}をコピー`}
+            className={`copy-path-toggle ${pathCopied ? "is-copied" : ""}`}
+            onClick={copyPath}
+            title={pathCopied ? "コピーしました" : "ファイルパスをコピー"}
+            type="button"
+          >
+            <Icon name={pathCopied ? "check" : "copy"} size={15} />
+          </button>
           {showsTextDiff ? (
             <button
               aria-label={wrapLines ? "コードの折り返しを無効にする" : "コードの折り返しを有効にする"}
@@ -164,6 +192,23 @@ export function DiffPanel({
       </div>
     </article>
   );
+}
+
+async function copyText(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.append(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  if (!copied) throw new Error("Unable to copy file path");
 }
 
 function VirtualizedDiffBody({ children, estimatedHeight }: { children: ReactNode; estimatedHeight: number }) {

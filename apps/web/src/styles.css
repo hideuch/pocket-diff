@@ -693,6 +693,7 @@ button:focus-visible {
 }
 
 .wrap-toggle,
+.copy-path-toggle,
 .file-collapse-toggle {
   width: 29px;
   height: 27px;
@@ -704,6 +705,12 @@ button:focus-visible {
   color: #667286;
   background: white;
   cursor: pointer;
+}
+
+.copy-path-toggle.is-copied {
+  border-color: #a9d8c1;
+  color: #23845a;
+  background: #eaf8f1;
 }
 
 .file-collapse-toggle svg {
@@ -1397,6 +1404,7 @@ button:focus-visible {
 }
 
 .file-heading .wrap-toggle,
+.file-heading .copy-path-toggle,
 .file-heading .file-collapse-toggle {
   width: 27px;
   height: 25px;
