@@ -1,5 +1,6 @@
 import type { FileDiffMetadata } from "@pierre/diffs";
 import { FileDiff } from "@pierre/diffs/react";
+import { useState } from "react";
 import type { DiffResponse } from "../types";
 import { FileRail } from "./FileRail";
 import { Icon } from "./Icon";
@@ -14,12 +15,23 @@ type DiffContentProps = {
   onNext: () => void;
 };
 
+const LINE_WRAP_KEY = "pocket-diff:line-wrap";
+
 export function DiffContent({ data, files, current, selected, onSelect, onPrevious, onNext }: DiffContentProps) {
+  const [wrapLines, setWrapLines] = useState(() => window.localStorage.getItem(LINE_WRAP_KEY) !== "scroll");
   const updated = data.generatedAt
     ? new Intl.DateTimeFormat("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(
         new Date(data.generatedAt),
       )
     : "—";
+
+  const toggleLineWrap = () => {
+    setWrapLines((currentValue) => {
+      const nextValue = !currentValue;
+      window.localStorage.setItem(LINE_WRAP_KEY, nextValue ? "wrap" : "scroll");
+      return nextValue;
+    });
+  };
 
   return (
     <>
@@ -41,7 +53,14 @@ export function DiffContent({ data, files, current, selected, onSelect, onPrevio
         </div>
       </section>
 
-      <FileRail files={files} selected={selected} onSelect={onSelect} />
+      <FileRail
+        files={files}
+        selected={selected}
+        updated={updated}
+        onSelect={onSelect}
+        onPrevious={onPrevious}
+        onNext={onNext}
+      />
 
       <main className="diff-stage">
         <div className="file-heading">
@@ -52,15 +71,27 @@ export function DiffContent({ data, files, current, selected, onSelect, onPrevio
             <p>{current.name.split("/").slice(0, -1).join("/") || "root"}</p>
             <h2>{current.name.split("/").at(-1)}</h2>
           </div>
-          <span className="change-label">{current.type}</span>
+          <div className="file-heading-actions">
+            <span className="change-label">{current.type}</span>
+            <button
+              aria-label={wrapLines ? "コードの折り返しを無効にする" : "コードの折り返しを有効にする"}
+              aria-pressed={wrapLines}
+              className="wrap-toggle"
+              onClick={toggleLineWrap}
+              title={wrapLines ? "折返し中。押すと横スクロール表示" : "横スクロール中。押すと折返し表示"}
+              type="button"
+            >
+              <Icon name="wrap" size={16} />
+            </button>
+          </div>
         </div>
-        <div className="diff-frame" key={`${current.name}-${data.revision}`}>
+        <div className="diff-frame" key={`${current.name}-${data.revision}-${wrapLines ? "wrap" : "scroll"}`}>
           <FileDiff
             fileDiff={current}
             disableWorkerPool
             options={{
               diffStyle: "unified",
-              overflow: "wrap",
+              overflow: wrapLines ? "wrap" : "scroll",
               diffIndicators: "bars",
               lineDiffType: "word",
               hunkSeparators: "line-info-basic",
@@ -72,21 +103,6 @@ export function DiffContent({ data, files, current, selected, onSelect, onPrevio
           />
         </div>
       </main>
-
-      <footer className="review-dock">
-        <button type="button" onClick={onPrevious} aria-label="前のファイル">
-          <Icon name="arrow" />
-        </button>
-        <div>
-          <span>
-            {selected + 1} / {files.length}
-          </span>
-          <small>更新 {updated}</small>
-        </div>
-        <button className="next-button" type="button" onClick={onNext} aria-label="次のファイル">
-          <Icon name="chevron" />
-        </button>
-      </footer>
     </>
   );
 }

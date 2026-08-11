@@ -1,72 +1,365 @@
 import type { FileDiffMetadata } from "@pierre/diffs";
-import { useEffect, useMemo, useRef } from "react";
+import type { RefObject } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "./Icon";
 
 type FileRailProps = {
   files: FileDiffMetadata[];
   selected: number;
+  updated: string;
   onSelect: (index: number) => void;
+  onPrevious: () => void;
+  onNext: () => void;
 };
 
-export function FileRail({ files, selected, onSelect }: FileRailProps) {
-  const selectedItem = useRef<HTMLButtonElement>(null);
+export function FileRail({ files, selected, updated, onSelect, onPrevious, onNext }: FileRailProps) {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
+  const selectedPill = useRef<HTMLButtonElement>(null);
+  const selectedRow = useRef<HTMLButtonElement>(null);
+  const drawer = useRef<HTMLElement>(null);
   const groups = useMemo(() => groupByFolder(files), [files]);
+  const filteredTree = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const visibleFiles = normalizedQuery
+      ? files.filter((file) => file.name.toLowerCase().includes(normalizedQuery))
+      : files;
+    return buildFileTree(visibleFiles, files);
+  }, [files, query]);
+  const current = files[selected];
+  const currentPath = fileParts(current.name);
+
+  const openDrawer = () => {
+    const folders = current.name.split("/").slice(0, -1);
+    setCollapsedFolders((collapsed) => {
+      const next = new Set(collapsed);
+      folders.reduce((path, folder) => {
+        const nextPath = path ? `${path}/${folder}` : folder;
+        next.delete(nextPath);
+        return nextPath;
+      }, "");
+      return next;
+    });
+    setQuery("");
+    setDrawerOpen(true);
+  };
 
   useEffect(() => {
-    selectedItem.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    selectedPill.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }, [selected]);
 
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+    drawer.current?.focus();
+    selectedRow.current?.scrollIntoView({ block: "center" });
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => event.key === "Escape" && setDrawerOpen(false);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [drawerOpen]);
+
+  const selectFile = (index: number) => {
+    onSelect(index);
+    setDrawerOpen(false);
+  };
+
+  const toggleFolder = (path: string) => {
+    setCollapsedFolders((collapsed) => {
+      const next = new Set(collapsed);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
+
   return (
-    <nav className="file-rail" aria-label="変更ファイル">
-      {groups.map((group) => {
-        const path = folderParts(group.folder);
-        return (
-          <section className="folder-group" aria-label={`${group.folder} フォルダ`} key={group.folder}>
-            <div className="folder-group-heading" title={group.folder}>
-              <Icon name="folder" size={13} />
-              <span className="folder-path">
-                {path.parents ? <span>{path.parents}/</span> : null}
-                <strong>{path.current}</strong>
-              </span>
-              <small>{group.files.length}</small>
-            </div>
-            <div className="folder-files">
-              {group.files.map(({ file, index }) => (
-                <button
-                  aria-current={index === selected ? "true" : undefined}
-                  className={`file-pill ${index === selected ? "is-selected" : ""}`}
-                  key={`${file.name}-${index}`}
-                  onClick={() => onSelect(index)}
-                  ref={index === selected ? selectedItem : undefined}
-                  title={file.name}
-                  type="button"
-                >
-                  <span className={`change-dot change-${file.type}`} />
-                  <span className="file-pill-name">{file.name.split("/").at(-1)}</span>
-                  <span className="file-pill-count">
-                    {index + 1}/{files.length}
-                  </span>
-                </button>
-              ))}
+    <>
+      <nav className="file-rail" aria-label="変更ファイル">
+        {groups.map((group) => {
+          const path = folderParts(group.folder);
+          return (
+            <section className="folder-group" aria-label={`${group.folder} フォルダ`} key={group.folder}>
+              <div className="folder-group-heading" title={group.folder}>
+                <Icon name="folder" size={13} />
+                <span className="folder-path">
+                  {path.parents ? <span>{path.parents}/</span> : null}
+                  <strong>{path.current}</strong>
+                </span>
+                <small>{group.files.length}</small>
+              </div>
+              <div className="folder-files">
+                {group.files.map(({ file, index }) => (
+                  <button
+                    aria-current={index === selected ? "true" : undefined}
+                    className={`file-pill ${index === selected ? "is-selected" : ""}`}
+                    key={`${file.name}-${index}`}
+                    onClick={() => onSelect(index)}
+                    ref={index === selected ? selectedPill : undefined}
+                    title={file.name}
+                    type="button"
+                  >
+                    <span className={`change-dot change-${file.type}`} />
+                    <span className="file-pill-name">{file.name.split("/").at(-1)}</span>
+                    <span className="file-pill-count">
+                      {index + 1}/{files.length}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </nav>
+
+      <footer className="review-dock">
+        <button type="button" onClick={onPrevious} aria-label="前のファイル">
+          <Icon name="arrow" />
+        </button>
+        <button className="mobile-file-switcher" type="button" onClick={openDrawer}>
+          <span className="mobile-file-icon">
+            <Icon name="folder" size={15} />
+          </span>
+          <span className="mobile-file-copy">
+            <small>{currentPath.folder}</small>
+            <strong>{currentPath.name}</strong>
+          </span>
+          <span className="mobile-file-position">
+            {selected + 1}
+            <i>/</i>
+            {files.length}
+          </span>
+          <Icon name="down" size={13} />
+        </button>
+        <div className="review-status">
+          <span>
+            {selected + 1} / {files.length}
+          </span>
+          <small>更新 {updated}</small>
+        </div>
+        <button className="next-button" type="button" onClick={onNext} aria-label="次のファイル">
+          <Icon name="chevron" />
+        </button>
+      </footer>
+
+      {drawerOpen ? (
+        <div
+          className="file-drawer-backdrop"
+          role="presentation"
+          onMouseDown={(event) => event.target === event.currentTarget && setDrawerOpen(false)}
+        >
+          <section
+            aria-labelledby="file-drawer-title"
+            aria-modal="true"
+            className="file-drawer"
+            ref={drawer}
+            role="dialog"
+            tabIndex={-1}
+          >
+            <div className="picker-grabber" aria-hidden="true" />
+            <header className="file-drawer-header">
+              <div>
+                <p className="eyebrow">WORKING TREE</p>
+                <h2 id="file-drawer-title">変更ファイル</h2>
+              </div>
+              <span className="file-total">{files.length}</span>
+              <button type="button" onClick={() => setDrawerOpen(false)} aria-label="閉じる">
+                <Icon name="close" />
+              </button>
+            </header>
+            <label className="file-search">
+              <Icon name="search" size={16} />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="ファイル名・フォルダで検索"
+              />
+            </label>
+            <div className="file-drawer-list">
+              <div className="file-tree" role="tree" aria-label="変更ファイルのツリー">
+                {filteredTree.files.map((entry) => (
+                  <TreeFile
+                    entry={entry}
+                    key={`${entry.file.name}-${entry.index}`}
+                    onSelect={selectFile}
+                    selected={selected}
+                    selectedRow={selectedRow}
+                  />
+                ))}
+                {filteredTree.children.map((node) => (
+                  <TreeFolder
+                    collapsedFolders={collapsedFolders}
+                    forceExpanded={Boolean(query.trim())}
+                    key={node.path}
+                    node={node}
+                    onSelect={selectFile}
+                    onToggle={toggleFolder}
+                    selected={selected}
+                    selectedRow={selectedRow}
+                  />
+                ))}
+              </div>
+              {filteredTree.count === 0 ? <p className="file-list-empty">一致するファイルはありません</p> : null}
             </div>
           </section>
-        );
-      })}
-    </nav>
+        </div>
+      ) : null}
+    </>
   );
 }
 
-function groupByFolder(files: FileDiffMetadata[]) {
+type IndexedFile = { file: FileDiffMetadata; index: number };
+type FileTreeNode = {
+  name: string;
+  path: string;
+  count: number;
+  children: FileTreeNode[];
+  files: IndexedFile[];
+};
+type MutableFileTreeNode = Omit<FileTreeNode, "children"> & { children: Map<string, MutableFileTreeNode> };
+
+type TreeFolderProps = {
+  node: FileTreeNode;
+  selected: number;
+  collapsedFolders: Set<string>;
+  forceExpanded: boolean;
+  selectedRow: RefObject<HTMLButtonElement | null>;
+  onSelect: (index: number) => void;
+  onToggle: (path: string) => void;
+};
+
+function TreeFolder({
+  node,
+  selected,
+  collapsedFolders,
+  forceExpanded,
+  selectedRow,
+  onSelect,
+  onToggle,
+}: TreeFolderProps) {
+  const expanded = forceExpanded || !collapsedFolders.has(node.path);
+
+  return (
+    <div className="file-tree-folder">
+      <button
+        aria-expanded={expanded}
+        className="file-tree-folder-row"
+        onClick={() => onToggle(node.path)}
+        role="treeitem"
+        type="button"
+      >
+        <span className={`tree-chevron ${expanded ? "is-expanded" : ""}`}>
+          <Icon name="chevron" size={13} />
+        </span>
+        <Icon name="folder" size={15} />
+        <strong>{node.name}</strong>
+        <small>{node.count}</small>
+      </button>
+      <div aria-hidden={!expanded} className={`file-tree-collapse ${expanded ? "is-expanded" : ""}`} inert={!expanded}>
+        <div className="file-tree-children" role="group">
+          {node.files.map((entry) => (
+            <TreeFile
+              entry={entry}
+              key={`${entry.file.name}-${entry.index}`}
+              onSelect={onSelect}
+              selected={selected}
+              selectedRow={selectedRow}
+            />
+          ))}
+          {node.children.map((child) => (
+            <TreeFolder
+              collapsedFolders={collapsedFolders}
+              forceExpanded={forceExpanded}
+              key={child.path}
+              node={child}
+              onSelect={onSelect}
+              onToggle={onToggle}
+              selected={selected}
+              selectedRow={selectedRow}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type TreeFileProps = {
+  entry: IndexedFile;
+  selected: number;
+  selectedRow: RefObject<HTMLButtonElement | null>;
+  onSelect: (index: number) => void;
+};
+
+function TreeFile({ entry, selected, selectedRow, onSelect }: TreeFileProps) {
+  const isSelected = entry.index === selected;
+  return (
+    <button
+      aria-current={isSelected ? "true" : undefined}
+      className={`file-drawer-row ${isSelected ? "is-selected" : ""}`}
+      onClick={() => onSelect(entry.index)}
+      ref={isSelected ? selectedRow : undefined}
+      role="treeitem"
+      type="button"
+    >
+      <span className={`change-dot change-${entry.file.type}`} />
+      <span>{entry.file.name.split("/").at(-1)}</span>
+      <small>{entry.file.type}</small>
+    </button>
+  );
+}
+
+function groupByFolder(files: FileDiffMetadata[], sourceFiles = files) {
   const groups = new Map<string, { file: FileDiffMetadata; index: number }[]>();
-  files.forEach((file, index) => {
+  files.forEach((file) => {
+    const index = sourceFiles.indexOf(file);
     const folder = file.name.split("/").slice(0, -1).join("/") || "repository root";
     groups.set(folder, [...(groups.get(folder) || []), { file, index }]);
   });
   return [...groups].map(([folder, groupedFiles]) => ({ folder, files: groupedFiles }));
 }
 
+function buildFileTree(files: FileDiffMetadata[], sourceFiles: FileDiffMetadata[]): FileTreeNode {
+  const root: MutableFileTreeNode = { name: "", path: "", count: 0, children: new Map(), files: [] };
+
+  files.forEach((file) => {
+    const parts = file.name.split("/");
+    const folders = parts.slice(0, -1);
+    const entry = { file, index: sourceFiles.indexOf(file) };
+    let current = root;
+    current.count += 1;
+
+    folders.forEach((name) => {
+      const path = current.path ? `${current.path}/${name}` : name;
+      let child = current.children.get(name);
+      if (!child) {
+        child = { name, path, count: 0, children: new Map(), files: [] };
+        current.children.set(name, child);
+      }
+      child.count += 1;
+      current = child;
+    });
+    current.files.push(entry);
+  });
+
+  return freezeNode(root);
+}
+
+function freezeNode(node: MutableFileTreeNode): FileTreeNode {
+  return { ...node, children: [...node.children.values()].map(freezeNode) };
+}
+
 function folderParts(folder: string) {
   if (folder === "repository root") return { parents: "", current: folder };
   const parts = folder.split("/");
   return { parents: parts.slice(0, -1).join("/"), current: parts.at(-1) };
+}
+
+function fileParts(path: string) {
+  const parts = path.split("/");
+  return { folder: parts.slice(0, -1).join("/") || "repository root", name: parts.at(-1) };
 }
