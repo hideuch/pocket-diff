@@ -37,9 +37,12 @@ function FileRail({ files, selected, onSelect }) {
 
 function RepositoryPicker({ repositories, activeId, onClose, onSelect, onRefresh }) {
   const [query, setQuery] = useState("");
+  const dialogRef = useRef(null);
   const filtered = repositories.filter((repository) =>
     `${repository.name} ${repository.label} ${repository.branch}`.toLowerCase().includes(query.toLowerCase()),
   );
+
+  useEffect(() => { dialogRef.current?.focus(); }, []);
 
   useEffect(() => {
     const closeOnEscape = (event) => event.key === "Escape" && onClose();
@@ -49,7 +52,7 @@ function RepositoryPicker({ repositories, activeId, onClose, onSelect, onRefresh
 
   return (
     <div className="picker-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="repo-picker" role="dialog" aria-modal="true" aria-labelledby="repo-picker-title">
+      <section ref={dialogRef} className="repo-picker" role="dialog" aria-modal="true" aria-labelledby="repo-picker-title" tabIndex={-1}>
         <div className="picker-grabber" aria-hidden="true" />
         <header className="picker-header">
           <div><p className="eyebrow">ON THIS DEVICE</p><h2 id="repo-picker-title">リポジトリを選ぶ</h2></div>
@@ -57,7 +60,7 @@ function RepositoryPicker({ repositories, activeId, onClose, onSelect, onRefresh
         </header>
         <label className="repo-search">
           <Icon name="search" size={16} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="名前・ブランチで検索" autoFocus />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="名前・ブランチで検索" />
         </label>
         <div className="repo-list">
           {filtered.map((repository) => (

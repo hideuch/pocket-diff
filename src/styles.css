@@ -168,7 +168,7 @@ button:focus-visible { outline: 3px solid rgba(54, 89, 217, 0.35); outline-offse
 .picker-header button { width: 36px; height: 36px; border: 0; border-radius: 50%; display: grid; place-items: center; color: var(--muted); background: #e9eef4; }
 .repo-search { height: 44px; padding: 0 13px; display: flex; align-items: center; gap: 9px; border: 1px solid var(--line); border-radius: 13px; color: var(--muted); background: white; }
 .repo-search:focus-within { border-color: #9daae8; box-shadow: 0 0 0 3px rgba(54, 89, 217, 0.1); }
-.repo-search input { width: 100%; border: 0; outline: 0; color: var(--ink); background: transparent; font: inherit; font-size: 13px; }
+.repo-search input { width: 100%; border: 0; outline: 0; color: var(--ink); background: transparent; font: inherit; font-size: 16px; }
 .repo-list { margin: 12px -4px; padding: 0 4px; overflow-y: auto; overscroll-behavior: contain; }
 .repo-row { width: 100%; min-height: 61px; padding: 8px; display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 9px; border: 1px solid transparent; border-radius: 13px; text-align: left; color: inherit; background: transparent; cursor: pointer; }
 .repo-row + .repo-row { margin-top: 3px; }
@@ -193,6 +193,7 @@ button:focus-visible { outline: 3px solid rgba(54, 89, 217, 0.35); outline-offse
   .change-summary, .file-rail { padding-inline: 0; }
   .diff-stage { margin-inline: 0; }
   .diff-frame { font-size: 12px; }
+  .repo-search input { font-size: 13px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
