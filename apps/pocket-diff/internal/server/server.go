@@ -9,8 +9,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/hidenariTakeuchi/diff/internal/catalog"
-	"github.com/hidenariTakeuchi/diff/internal/gitdiff"
+	"github.com/hidenariTakeuchi/diff/apps/pocket-diff/internal/catalog"
+	"github.com/hidenariTakeuchi/diff/apps/pocket-diff/internal/gitdiff"
 )
 
 type Server struct {

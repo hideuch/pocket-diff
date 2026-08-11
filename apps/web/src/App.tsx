@@ -1,27 +1,52 @@
-import { parsePatchFiles } from "@pierre/diffs";
+import { parsePatchFiles, type FileDiffMetadata } from "@pierre/diffs";
 import { FileDiff } from "@pierre/diffs/react";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const REFRESH_MS = 3000;
 const LAST_REPO_KEY = "pocket-diff:last-repository";
 const API_BASE = `${import.meta.env.BASE_URL}api`;
 
-function Icon({ name, size = 18 }) {
-  const paths = {
-    branch: <path d="M6 3v9a3 3 0 0 0 3 3h6M6 3a2 2 0 1 0 0 .01M15 15a2 2 0 1 0 0 .01M15 5a2 2 0 1 0 0 .01M15 7v3" />,
-    refresh: <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5" />,
-    file: <path d="M7 3h7l4 4v14H7zM14 3v5h5" />,
-    chevron: <path d="m9 18 6-6-6-6" />,
-    arrow: <path d="m15 18-6-6 6-6" />,
-    down: <path d="m7 10 5 5 5-5" />,
-    close: <path d="m6 6 12 12M18 6 6 18" />,
-    search: <path d="m21 21-4.3-4.3M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0" />,
-    repo: <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v16H6.5A2.5 2.5 0 0 1 4 16.5zM4 16.5A2.5 2.5 0 0 1 6.5 14H19" />,
-  };
-  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
+type Repository = {
+  id: string;
+  name: string;
+  label: string;
+  branch: string;
+  changes: number;
+};
+
+type DiffResponse = {
+  repo: string;
+  branch: string;
+  base: string;
+  patch: string;
+  revision: string;
+  summary: { additions: number; deletions: number; files: number };
+  skipped: string[];
+  generatedAt: string;
+};
+
+type ApiError = { error?: string; detail?: string };
+
+const iconPaths = {
+  branch: <path d="M6 3v9a3 3 0 0 0 3 3h6M6 3a2 2 0 1 0 0 .01M15 15a2 2 0 1 0 0 .01M15 5a2 2 0 1 0 0 .01M15 7v3" />,
+  refresh: <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5" />,
+  file: <path d="M7 3h7l4 4v14H7zM14 3v5h5" />,
+  chevron: <path d="m9 18 6-6-6-6" />,
+  arrow: <path d="m15 18-6-6 6-6" />,
+  down: <path d="m7 10 5 5 5-5" />,
+  close: <path d="m6 6 12 12M18 6 6 18" />,
+  search: <path d="m21 21-4.3-4.3M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0" />,
+  repo: <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v16H6.5A2.5 2.5 0 0 1 4 16.5zM4 16.5A2.5 2.5 0 0 1 6.5 14H19" />,
+} satisfies Record<string, ReactNode>;
+
+type IconName = keyof typeof iconPaths;
+
+function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
+  return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{iconPaths[name]}</svg>;
 }
 
-function FileRail({ files, selected, onSelect }) {
+function FileRail({ files, selected, onSelect }: { files: FileDiffMetadata[]; selected: number; onSelect: (index: number) => void }) {
   return (
     <nav className="file-rail" aria-label="変更ファイル">
       {files.map((file, index) => (
@@ -35,9 +60,15 @@ function FileRail({ files, selected, onSelect }) {
   );
 }
 
-function RepositoryPicker({ repositories, activeId, onClose, onSelect, onRefresh }) {
+function RepositoryPicker({ repositories, activeId, onClose, onSelect, onRefresh }: {
+  repositories: Repository[];
+  activeId: string;
+  onClose: () => void;
+  onSelect: (id: string) => void;
+  onRefresh: () => Promise<void>;
+}) {
   const [query, setQuery] = useState("");
-  const dialogRef = useRef(null);
+  const dialogRef = useRef<HTMLElement>(null);
   const filtered = repositories.filter((repository) =>
     `${repository.name} ${repository.label} ${repository.branch}`.toLowerCase().includes(query.toLowerCase()),
   );
@@ -45,7 +76,7 @@ function RepositoryPicker({ repositories, activeId, onClose, onSelect, onRefresh
   useEffect(() => { dialogRef.current?.focus(); }, []);
 
   useEffect(() => {
-    const closeOnEscape = (event) => event.key === "Escape" && onClose();
+    const closeOnEscape = (event: KeyboardEvent) => event.key === "Escape" && onClose();
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
@@ -81,7 +112,7 @@ function RepositoryPicker({ repositories, activeId, onClose, onSelect, onRefresh
   );
 }
 
-function EmptyState({ noRepositories = false }) {
+function EmptyState({ noRepositories = false }: { noRepositories?: boolean }) {
   return (
     <main className="empty-state">
       <div className="empty-glyph" aria-hidden="true"><span /><span /><span /></div>
@@ -92,24 +123,24 @@ function EmptyState({ noRepositories = false }) {
   );
 }
 
-function ErrorState({ message, onRetry }) {
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
   return <main className="empty-state error-state"><p className="eyebrow">REPOSITORY UNAVAILABLE</p><h1>差分を読めませんでした</h1><p>{message}</p><button className="retry-button" onClick={onRetry} type="button">もう一度読む</button></main>;
 }
 
 export function App() {
-  const [repositories, setRepositories] = useState(null);
+  const [repositories, setRepositories] = useState<Repository[] | null>(null);
   const [activeRepoId, setActiveRepoId] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [data, setData] = useState(null);
+  const [data, setData] = useState<DiffResponse | null>(null);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const revisionRef = useRef("");
 
-  const loadRepositories = useCallback(async ({ refresh = false } = {}) => {
+  const loadRepositories = useCallback(async ({ refresh = false }: { refresh?: boolean } = {}) => {
     try {
       const response = await fetch(`${API_BASE}/repos${refresh ? "?refresh=1" : ""}`, { cache: "no-cache" });
-      const result = await response.json();
+      const result = await response.json() as { repositories: Repository[] } & ApiError;
       if (!response.ok) throw new Error(result.detail || result.error);
       setRepositories(result.repositories);
       setError("");
@@ -121,14 +152,14 @@ export function App() {
         });
       }
     } catch (loadError) {
-      setError(loadError.message || "リポジトリを検索できませんでした");
+      setError(errorMessage(loadError, "リポジトリを検索できませんでした"));
       setRepositories([]);
     }
   }, []);
 
   useEffect(() => { loadRepositories(); }, [loadRepositories]);
 
-  const load = useCallback(async ({ quiet = false } = {}) => {
+  const load = useCallback(async ({ quiet = false }: { quiet?: boolean } = {}) => {
     if (!activeRepoId) return;
     if (!quiet) setRefreshing(true);
     try {
@@ -137,13 +168,13 @@ export function App() {
         headers: revisionRef.current ? { "If-None-Match": `\"${revisionRef.current}\"` } : {},
       });
       if (response.status === 304) return;
-      const next = await response.json();
+      const next = await response.json() as DiffResponse & ApiError;
       if (!response.ok) throw new Error(next.detail || next.error);
       revisionRef.current = next.revision;
       setData(next);
       setError("");
     } catch (loadError) {
-      setError(loadError.message || "接続を確認してください");
+      setError(errorMessage(loadError, "接続を確認してください"));
     } finally {
       setRefreshing(false);
     }
@@ -175,7 +206,7 @@ export function App() {
   const activeRepository = repositories?.find((repository) => repository.id === activeRepoId);
   const current = files[selected];
   const updated = data?.generatedAt ? new Intl.DateTimeFormat("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(data.generatedAt)) : "—";
-  const selectRepository = (id) => { setActiveRepoId(id); setPickerOpen(false); };
+  const selectRepository = (id: string) => { setActiveRepoId(id); setPickerOpen(false); };
 
   return (
     <div className="app-shell">
@@ -192,7 +223,7 @@ export function App() {
       {error && !data ? <ErrorState message={error} onRetry={() => repositories?.length ? load() : loadRepositories({ refresh: true })} /> : null}
       {files.length === 0 && data ? <EmptyState /> : null}
 
-      {files.length > 0 ? <>
+      {files.length > 0 && data && current ? <>
         <section className="change-summary" aria-label="変更の概要">
           <div><p className="eyebrow">LOCAL CHANGES</p><h1>{data.summary.files}<small> files</small></h1></div>
           <div className="change-counts"><span className="additions">+{data.summary.additions}</span><span className="deletions">−{data.summary.deletions}</span></div>
@@ -210,4 +241,8 @@ export function App() {
       {error && data ? <div className="toast" role="status">更新できませんでした。前回の差分を表示中です。</div> : null}
     </div>
   );
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
 }

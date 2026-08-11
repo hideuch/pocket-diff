@@ -14,21 +14,23 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
+      - name: Setup pnpm
+        uses: ./.github/actions/setup-pnpm
 
       - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          go-version-file: apps/pocket-diff/go.mod
           cache: false
 
       - name: Build embedded UI
-        run: npm ci && npm run build
+        run: |
+          pnpm --filter @pocket-diff/web build
+          pnpm --filter @pocket-diff/server embed
 
       - name: Test
-        run: go test ./...
+        run: |
+          pnpm typecheck
+          pnpm test
 
       - name: Build release archives
         env:
@@ -39,12 +41,12 @@ jobs:
             os="${target%/*}"
             arch="${target#*/}"
             name="pocket-diff_${os}_${arch}"
-            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -tags release -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$name/pocket-diff" ./cmd/pocket-diff
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go -C apps/pocket-diff build -tags release -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$GITHUB_WORKSPACE/$name/pocket-diff" ./cmd/pocket-diff
             tar -czf "release/${name}.tar.gz" "$name/pocket-diff"
             rm -rf "$name"
           done
           name="pocket-diff_windows_amd64"
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -tags release -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$name/pocket-diff.exe" ./cmd/pocket-diff
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go -C apps/pocket-diff build -tags release -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$GITHUB_WORKSPACE/$name/pocket-diff.exe" ./cmd/pocket-diff
           zip -q -r "release/${name}.zip" "$name/pocket-diff.exe"
           rm -rf "$name"
           cd release

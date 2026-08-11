@@ -1,0 +1,16 @@
+[tools]
+pnpm = "11.20.0"
+node = "24.15.0"
+go = "1.26.5"
+
+[tasks.setup]
+description = "Install the toolchain and workspace dependencies"
+run = "pnpm install"
+
+[tasks.check]
+description = "Run all tests and builds"
+run = "pnpm check"
+
+[tasks.dev]
+description = "Start the Go API and Vite development server"
+run = "pnpm dev"

@@ -76,23 +76,40 @@ tailscale serve --bg --set-path=/diff http://127.0.0.1:4173
 
 ## 開発
 
-Node.jsはフロントエンドの開発・リリースビルドだけに使用します。
+このリポジトリはpnpm workspaceとTurborepoで構成したmonorepoです。React UIはTypeScript（TSX）、サーバーと配布バイナリはGoで実装しています。
 
-```bash
-npm install
-npm run build
-go test ./...
-go build -tags release -o build/pocket-diff ./cmd/pocket-diff
+```text
+apps/
+├── web/          React + TypeScript + Vite
+└── pocket-diff/  Goサーバー・ネイティブバイナリ
 ```
 
-フロントエンドを開発する場合は、ターミナルを2つ使用します。
+開発ツールのバージョンはmiseで固定しています。最初に次を実行してください。
 
 ```bash
-go run ./cmd/pocket-diff serve --root /path/to/projects
-npm run dev
+mise install
+mise run setup
 ```
 
-Viteは`http://127.0.0.1:5173`で起動し、APIをGoサーバーの`127.0.0.1:4173`へ転送します。
+主要なコマンドはリポジトリのルートから実行できます。
+
+```bash
+pnpm dev        # Web UIとGoサーバーを起動
+pnpm typecheck  # TypeScriptを検査
+pnpm test       # workspace全体をテスト
+pnpm build      # UI埋め込み済みGoバイナリをビルド
+pnpm check      # 上記の検査・テスト・ビルドを一括実行
+```
+
+開発サーバーへ対象フォルダを渡す場合は環境変数を使用します。
+
+```bash
+DIFF_ROOTS=/path/to/projects pnpm dev
+```
+
+Viteは`http://127.0.0.1:5173`で起動し、APIをGoサーバーの`127.0.0.1:4173`へ転送します。ビルドしたバイナリは`apps/pocket-diff/dist/pocket-diff`に生成されます。
+
+Node.js、pnpm、miseが必要なのは開発時だけです。配布する単一GoバイナリにはReact UIが埋め込まれるため、利用端末にはいずれも必要ありません。
 
 ## リリース
 

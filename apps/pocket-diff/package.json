@@ -1,0 +1,14 @@
+{
+  "name": "@pocket-diff/server",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "build": "pnpm embed && mkdir -p dist && CGO_ENABLED=0 go build -tags release -trimpath -o dist/pocket-diff ./cmd/pocket-diff",
+    "dev": "go run ./cmd/pocket-diff serve",
+    "embed": "sh scripts/embed-web.sh",
+    "test": "go test ./..."
+  },
+  "dependencies": {
+    "@pocket-diff/web": "workspace:*"
+  }
+}

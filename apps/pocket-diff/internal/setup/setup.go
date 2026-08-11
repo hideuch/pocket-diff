@@ -15,8 +15,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hidenariTakeuchi/diff/internal/config"
-	"github.com/hidenariTakeuchi/diff/internal/server"
+	"github.com/hidenariTakeuchi/diff/apps/pocket-diff/internal/config"
+	"github.com/hidenariTakeuchi/diff/apps/pocket-diff/internal/server"
 )
 
 const (

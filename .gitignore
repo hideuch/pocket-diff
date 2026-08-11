@@ -1,6 +1,9 @@
 node_modules/
+.pnpm-store/
+.turbo/
 dist/
-internal/web/dist/
+apps/*/dist/
+apps/pocket-diff/internal/web/dist/
 build/
 release/
 .DS_Store
