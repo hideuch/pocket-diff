@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 )
 
-func cleanupFiles(home, bootstrap string, keepConfig bool) error {
-	paths := []string{bootstrap}
+func cleanupFiles(home string, bootstraps []string, keepConfig bool) error {
+	paths := append([]string{}, bootstraps...)
 	if keepConfig {
 		paths = append(paths,
 			filepath.Join(home, "bin"),

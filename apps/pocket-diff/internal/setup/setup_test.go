@@ -3,9 +3,20 @@ package setup
 import (
 	"bytes"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+func TestBinaryNameUsesShortCommand(t *testing.T) {
+	want := "pcdiff"
+	if runtime.GOOS == "windows" {
+		want += ".exe"
+	}
+	if got := binaryName(); got != want {
+		t.Fatalf("binaryName() = %q, want %q", got, want)
+	}
+}
 
 func TestParseOptionsSupportsRepeatableRoots(t *testing.T) {
 	options, err := ParseOptions([]string{"--root", "./one", "--root=./two", "--base-path=diff/", "--port=5000", "--yes", "--dry-run", "--install-tailscale"})

@@ -256,18 +256,20 @@ func extractBinary(content []byte, archive string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, file := range reader.File {
-			if path.Base(filepath.ToSlash(file.Name)) != "pocket-diff.exe" || file.FileInfo().IsDir() {
-				continue
+		for _, name := range []string{"pcdiff.exe", "pocket-diff.exe"} {
+			for _, file := range reader.File {
+				if path.Base(filepath.ToSlash(file.Name)) != name || file.FileInfo().IsDir() {
+					continue
+				}
+				input, err := file.Open()
+				if err != nil {
+					return nil, err
+				}
+				defer input.Close()
+				return readBinary(input, file.UncompressedSize64)
 			}
-			input, err := file.Open()
-			if err != nil {
-				return nil, err
-			}
-			defer input.Close()
-			return readBinary(input, file.UncompressedSize64)
 		}
-		return nil, errors.New("archive does not contain pocket-diff.exe")
+		return nil, errors.New("archive does not contain pcdiff.exe")
 	}
 	gzipReader, err := gzip.NewReader(bytes.NewReader(content))
 	if err != nil {
@@ -283,11 +285,12 @@ func extractBinary(content []byte, archive string) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		if path.Base(filepath.ToSlash(header.Name)) == "pocket-diff" && header.Typeflag == tar.TypeReg {
+		name := path.Base(filepath.ToSlash(header.Name))
+		if (name == "pcdiff" || name == "pocket-diff") && header.Typeflag == tar.TypeReg {
 			return readBinary(tarReader, uint64(header.Size))
 		}
 	}
-	return nil, errors.New("archive does not contain pocket-diff")
+	return nil, errors.New("archive does not contain pcdiff")
 }
 
 func readBinary(reader io.Reader, size uint64) ([]byte, error) {

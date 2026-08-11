@@ -43,18 +43,19 @@ curl --fail --location --silent --show-error --output "$temporary_directory/chec
 )
 
 mkdir -p "$install_directory"
-install -m 755 "$temporary_directory/pocket-diff_${target_os}_${target_arch}/pocket-diff" "$install_directory/pocket-diff"
-echo "Installed: $install_directory/pocket-diff"
+install -m 755 "$temporary_directory/pocket-diff_${target_os}_${target_arch}/pcdiff" "$install_directory/pcdiff"
+ln -sf pcdiff "$install_directory/pocket-diff"
+echo "Installed: $install_directory/pcdiff"
 
 case ":$PATH:" in
   *":$install_directory:"*) ;;
-  *) echo "Add $install_directory to PATH before using pocket-diff." ;;
+  *) echo "Add $install_directory to PATH before using pcdiff." ;;
 esac
 
 if [ "${POCKET_DIFF_NO_SETUP:-0}" = "1" ]; then
-  echo "Run: $install_directory/pocket-diff setup"
+  echo "Run: $install_directory/pcdiff setup"
 elif [ -r /dev/tty ] && [ -w /dev/tty ]; then
-  "$install_directory/pocket-diff" setup </dev/tty
+  "$install_directory/pcdiff" setup </dev/tty
 else
-  echo "Run: $install_directory/pocket-diff setup"
+  echo "Run: $install_directory/pcdiff setup"
 fi

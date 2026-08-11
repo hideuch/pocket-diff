@@ -69,7 +69,7 @@ func run(arguments []string) error {
 		}
 		return uninstall.Run(options, os.Stdin, os.Stdout)
 	case "version", "--version", "-v":
-		fmt.Println("pocket-diff", version, runtime.GOOS+"/"+runtime.GOARCH)
+		fmt.Println("pcdiff", version, runtime.GOOS+"/"+runtime.GOARCH)
 		return nil
 	case "help", "--help", "-h":
 		usage()
@@ -204,12 +204,12 @@ func doctor() error {
 }
 
 func usage() {
-	fmt.Println(`Pocket Diff
+	fmt.Println(`Pocket Diff (pcdiff)
 
-  pocket-diff setup [--root PATH] [--depth N] [--base-path /diff] [--port 4173]
-  pocket-diff serve [--config PATH | --root PATH]
-  pocket-diff doctor
-  pocket-diff update [--check]
-  pocket-diff uninstall [--keep-config] [--dry-run] [--yes]
-  pocket-diff version`)
+  pcdiff setup [--root PATH] [--depth N] [--base-path /diff] [--port 4173]
+  pcdiff serve [--config PATH | --root PATH]
+  pcdiff doctor
+  pcdiff update [--check]
+  pcdiff uninstall [--keep-config] [--dry-run] [--yes]
+  pcdiff version`)
 }

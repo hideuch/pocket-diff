@@ -264,9 +264,9 @@ func installSelf(destination string) error {
 
 func binaryName() string {
 	if runtime.GOOS == "windows" {
-		return "pocket-diff.exe"
+		return "pcdiff.exe"
 	}
-	return "pocket-diff"
+	return "pcdiff"
 }
 
 func configureService(binaryPath, configPath, home string, dryRun bool, output io.Writer) error {

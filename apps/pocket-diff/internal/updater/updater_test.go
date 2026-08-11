@@ -67,7 +67,7 @@ func TestExtractBinaryFromTarGzip(t *testing.T) {
 	var archive bytes.Buffer
 	gzipWriter := gzip.NewWriter(&archive)
 	tarWriter := tar.NewWriter(gzipWriter)
-	if err := tarWriter.WriteHeader(&tar.Header{Name: "pocket-diff_linux_amd64/pocket-diff", Mode: 0o755, Size: int64(len(want))}); err != nil {
+	if err := tarWriter.WriteHeader(&tar.Header{Name: "pocket-diff_linux_amd64/pcdiff", Mode: 0o755, Size: int64(len(want))}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tarWriter.Write(want); err != nil {

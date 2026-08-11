@@ -46,13 +46,15 @@ jobs:
             os="${target%/*}"
             arch="${target#*/}"
             name="pocket-diff_${os}_${arch}"
-            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go -C apps/pocket-diff build -tags release -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$GITHUB_WORKSPACE/$name/pocket-diff" ./cmd/pocket-diff
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go -C apps/pocket-diff build -tags release -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$GITHUB_WORKSPACE/$name/pcdiff" ./cmd/pocket-diff
+            cp "$name/pcdiff" "$name/pocket-diff"
             cp LICENSE NOTICE THIRD_PARTY_NOTICES.md THIRD_PARTY_LICENSES.txt "$name/"
             tar -czf "release/${name}.tar.gz" "$name"
             rm -rf "$name"
           done
           name="pocket-diff_windows_amd64"
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go -C apps/pocket-diff build -tags release -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$GITHUB_WORKSPACE/$name/pocket-diff.exe" ./cmd/pocket-diff
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go -C apps/pocket-diff build -tags release -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$GITHUB_WORKSPACE/$name/pcdiff.exe" ./cmd/pocket-diff
+          cp "$name/pcdiff.exe" "$name/pocket-diff.exe"
           cp LICENSE NOTICE THIRD_PARTY_NOTICES.md THIRD_PARTY_LICENSES.txt "$name/"
           zip -q -r "release/${name}.zip" "$name"
           rm -rf "$name"

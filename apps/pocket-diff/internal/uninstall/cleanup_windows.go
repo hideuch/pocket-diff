@@ -10,12 +10,12 @@ import (
 	"strings"
 )
 
-func cleanupFiles(home, bootstrap string, keepConfig bool) error {
+func cleanupFiles(home string, bootstraps []string, keepConfig bool) error {
 	script, err := os.CreateTemp("", "pocket-diff-uninstall-*.cmd")
 	if err != nil {
 		return err
 	}
-	paths := []string{bootstrap}
+	paths := append([]string{}, bootstraps...)
 	if keepConfig {
 		paths = append(paths,
 			filepath.Join(home, "bin"),

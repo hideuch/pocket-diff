@@ -46,7 +46,10 @@ func Run(options Options, input io.Reader, output io.Writer) error {
 	if err != nil {
 		return err
 	}
-	bootstrap := filepath.Join(userHome, ".local", "bin", binaryName())
+	bootstraps := []string{
+		filepath.Join(userHome, ".local", "bin", commandName()),
+		filepath.Join(userHome, ".local", "bin", legacyCommandName()),
+	}
 
 	fmt.Fprintln(output, "\nPocket Diff uninstall")
 	fmt.Fprintf(output, "  Service: %s\n  Data: %s\n", serviceName(), home)
@@ -87,7 +90,7 @@ func Run(options Options, input io.Reader, output io.Writer) error {
 			return err
 		}
 	}
-	if err := cleanupFiles(home, bootstrap, options.KeepConfig); err != nil {
+	if err := cleanupFiles(home, bootstraps, options.KeepConfig); err != nil {
 		return err
 	}
 	fmt.Fprintln(output, "Pocket Diff was uninstalled. Git repositories were not changed.")
@@ -194,7 +197,14 @@ func serviceName() string {
 	}
 }
 
-func binaryName() string {
+func commandName() string {
+	if runtime.GOOS == "windows" {
+		return "pcdiff.exe"
+	}
+	return "pcdiff"
+}
+
+func legacyCommandName() string {
 	if runtime.GOOS == "windows" {
 		return "pocket-diff.exe"
 	}
