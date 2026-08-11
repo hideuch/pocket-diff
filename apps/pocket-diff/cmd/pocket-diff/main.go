@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/hideuch/pocket-diff/apps/pocket-diff/internal/catalog"
+	"github.com/hideuch/pocket-diff/apps/pocket-diff/internal/commandalias"
 	"github.com/hideuch/pocket-diff/apps/pocket-diff/internal/config"
 	"github.com/hideuch/pocket-diff/apps/pocket-diff/internal/server"
 	"github.com/hideuch/pocket-diff/apps/pocket-diff/internal/setup"
@@ -38,6 +39,11 @@ func (values *rootsFlag) Set(value string) error {
 }
 
 func main() {
+	if version != "dev" {
+		if err := commandalias.Ensure(); err != nil {
+			fmt.Fprintln(os.Stderr, "Pocket Diff command migration:", err)
+		}
+	}
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "Pocket Diff:", err)
 		os.Exit(1)

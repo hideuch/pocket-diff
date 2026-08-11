@@ -31,6 +31,7 @@ curl -fsSL https://raw.githubusercontent.com/hideuch/pocket-diff/main/install.sh
 セットアップ後は、同じTailnetに参加しているスマホから表示された`https://<device>.<tailnet>.ts.net/diff/`を開きます。macOSではLaunchAgent、Linuxではsystemd user service、Windowsではタスクスケジューラへ登録します。
 
 インストールされる標準コマンドは`pcdiff`です。既存スクリプトとの互換性のため、従来の`pocket-diff`もエイリアスとして引き続き利用できます。
+旧バージョンから更新した端末では、Pocket Diffの次回起動時に`~/.local/bin/pcdiff`を自動作成します。
 
 Tailscale CLIが見つからない場合は、対話セットアップがインストールするか確認します。macOSは公式パッケージをSHA-256検証後に導入し、Linuxは公式インストーラー、Windowsはwingetを使用します。OSの権限確認、Tailscaleの利用規約への同意、Tailnetへのログインは画面の案内に従ってください。
 

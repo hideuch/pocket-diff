@@ -48,6 +48,7 @@ func Run(options Options, input io.Reader, output io.Writer) error {
 	}
 	bootstraps := []string{
 		filepath.Join(userHome, ".local", "bin", commandName()),
+		filepath.Join(userHome, ".local", "bin", "pcdiff.cmd"),
 		filepath.Join(userHome, ".local", "bin", legacyCommandName()),
 	}
 
