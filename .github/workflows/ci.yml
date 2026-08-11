@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Build embedded UI
+        run: npm ci && npm run build
+
+      - name: Test and compile
+        run: |
+          go test ./...
+          CGO_ENABLED=0 go build -tags release -trimpath -o /tmp/pocket-diff ./cmd/pocket-diff

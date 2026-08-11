@@ -1,0 +1,56 @@
+name: Release binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Build embedded UI
+        run: npm ci && npm run build
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build release archives
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          mkdir -p release
+          for target in darwin/arm64 darwin/amd64 linux/arm64 linux/amd64; do
+            os="${target%/*}"
+            arch="${target#*/}"
+            name="pocket-diff_${os}_${arch}"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -tags release -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$name/pocket-diff" ./cmd/pocket-diff
+            tar -czf "release/${name}.tar.gz" "$name/pocket-diff"
+            rm -rf "$name"
+          done
+          name="pocket-diff_windows_amd64"
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -tags release -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$name/pocket-diff.exe" ./cmd/pocket-diff
+          zip -q -r "release/${name}.zip" "$name/pocket-diff.exe"
+          rm -rf "$name"
+          cd release
+          sha256sum * > checksums.txt
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" release/* --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
