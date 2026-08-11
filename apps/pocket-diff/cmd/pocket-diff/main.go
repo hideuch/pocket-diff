@@ -14,12 +14,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hidenariTakeuchi/diff/apps/pocket-diff/internal/catalog"
-	"github.com/hidenariTakeuchi/diff/apps/pocket-diff/internal/config"
-	"github.com/hidenariTakeuchi/diff/apps/pocket-diff/internal/server"
-	"github.com/hidenariTakeuchi/diff/apps/pocket-diff/internal/setup"
-	"github.com/hidenariTakeuchi/diff/apps/pocket-diff/internal/updater"
-	"github.com/hidenariTakeuchi/diff/apps/pocket-diff/internal/web"
+	"github.com/hidenariTakeuchi/pocket-diff/apps/pocket-diff/internal/catalog"
+	"github.com/hidenariTakeuchi/pocket-diff/apps/pocket-diff/internal/config"
+	"github.com/hidenariTakeuchi/pocket-diff/apps/pocket-diff/internal/server"
+	"github.com/hidenariTakeuchi/pocket-diff/apps/pocket-diff/internal/setup"
+	"github.com/hidenariTakeuchi/pocket-diff/apps/pocket-diff/internal/updater"
+	"github.com/hidenariTakeuchi/pocket-diff/apps/pocket-diff/internal/web"
 )
 
 var version = "dev"

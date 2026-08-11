@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-repository="hidenariTakeuchi/diff"
+repository="hidenariTakeuchi/pocket-diff"
 install_directory="${POCKET_DIFF_INSTALL_DIR:-$HOME/.local/bin}"
 
 command -v curl >/dev/null 2>&1 || {
