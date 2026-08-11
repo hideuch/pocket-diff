@@ -6,18 +6,20 @@ import { Icon } from "./Icon";
 
 type DiffPanelProps = {
   activeRepoId: string;
+  expanded: boolean;
   file: FileDiffMetadata;
   index: number;
   isCurrent: boolean;
   patchBlock: string;
   revision: string;
   total: number;
-  virtualized: boolean;
   wrapLines: boolean;
+  onToggleExpanded: () => void;
   onToggleLineWrap: () => void;
 };
 
 const IMAGE_EXTENSIONS = new Set(["avif", "bmp", "gif", "ico", "jpeg", "jpg", "png", "svg", "webp"]);
+const FILE_COLLAPSE_MS = 240;
 const visibilityCallbacks = new WeakMap<Element, (visible: boolean) => void>();
 let visibilityObserver: IntersectionObserver | undefined;
 
@@ -36,16 +38,19 @@ function isImageFile(name: string) {
 
 export function DiffPanel({
   activeRepoId,
+  expanded,
   file,
   index,
   isCurrent,
   patchBlock,
   revision,
   total,
-  virtualized,
   wrapLines,
+  onToggleExpanded,
   onToggleLineWrap,
 }: DiffPanelProps) {
+  const [bodyMounted, setBodyMounted] = useState(true);
+  const collapseTimer = useRef<number | undefined>(undefined);
   const isBinary = /^Binary files .+ differ$|^GIT binary patch$/m.test(patchBlock);
   const isImage = isImageFile(file.name);
   const isRename = file.type === "rename-pure" || file.type === "rename-changed";
@@ -88,9 +93,26 @@ export function DiffPanel({
     </>
   );
 
+  useEffect(() => {
+    if (expanded) setBodyMounted(true);
+  }, [expanded]);
+
+  useEffect(() => () => window.clearTimeout(collapseTimer.current), []);
+
+  const toggleExpanded = () => {
+    window.clearTimeout(collapseTimer.current);
+    if (expanded) {
+      onToggleExpanded();
+      collapseTimer.current = window.setTimeout(() => setBodyMounted(false), FILE_COLLAPSE_MS);
+      return;
+    }
+    setBodyMounted(true);
+    window.requestAnimationFrame(onToggleExpanded);
+  };
+
   return (
     <article
-      className={`diff-stage diff-file-panel ${isCurrent ? "is-current" : ""}`}
+      className={`diff-stage diff-file-panel ${isCurrent ? "is-current" : ""} ${expanded ? "is-expanded" : "is-collapsed"}`}
       data-diff-index={index}
       id={`diff-file-${index}`}
     >
@@ -103,11 +125,9 @@ export function DiffPanel({
           <h2>{file.name.split("/").at(-1)}</h2>
         </div>
         <div className="file-heading-actions">
-          {virtualized ? (
-            <span className="all-diff-position">
-              {index + 1}/{total}
-            </span>
-          ) : null}
+          <span className="all-diff-position">
+            {index + 1}/{total}
+          </span>
           <span className="change-label">{file.type}</span>
           {showsTextDiff ? (
             <button
@@ -121,13 +141,27 @@ export function DiffPanel({
               <Icon name="wrap" size={16} />
             </button>
           ) : null}
+          <button
+            aria-expanded={expanded}
+            aria-label={expanded ? `${file.name}を折りたたむ` : `${file.name}を展開する`}
+            className={`file-collapse-toggle ${expanded ? "is-expanded" : ""}`}
+            onClick={toggleExpanded}
+            title={expanded ? "ファイルを折りたたむ" : "ファイルを展開する"}
+            type="button"
+          >
+            <Icon name="chevron" size={15} />
+          </button>
         </div>
       </div>
-      {virtualized ? (
-        <VirtualizedDiffBody estimatedHeight={estimateBodyHeight(file, isImage, isBinary)}>{body}</VirtualizedDiffBody>
-      ) : (
-        body
-      )}
+      <div aria-hidden={!expanded} className={`diff-panel-collapse ${expanded ? "is-expanded" : ""}`} inert={!expanded}>
+        <div className="diff-panel-collapse-inner">
+          {bodyMounted ? (
+            <VirtualizedDiffBody estimatedHeight={estimateBodyHeight(file, isImage, isBinary)}>
+              {body}
+            </VirtualizedDiffBody>
+          ) : null}
+        </div>
+      </div>
     </article>
   );
 }

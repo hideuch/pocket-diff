@@ -6,7 +6,6 @@ import { Icon } from "./Icon";
 
 type FileRailProps = {
   files: FileDiffMetadata[];
-  railVisible?: boolean;
   selected: number;
   updated: string;
   onSelect: (index: number) => void;
@@ -14,24 +13,14 @@ type FileRailProps = {
   onNext: () => void;
 };
 
-export function FileRail({
-  files,
-  railVisible = true,
-  selected,
-  updated,
-  onSelect,
-  onPrevious,
-  onNext,
-}: FileRailProps) {
+export function FileRail({ files, selected, updated, onSelect, onPrevious, onNext }: FileRailProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerClosing, setDrawerClosing] = useState(false);
   const [query, setQuery] = useState("");
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
-  const selectedPill = useRef<HTMLButtonElement>(null);
   const selectedRow = useRef<HTMLButtonElement>(null);
   const drawer = useRef<HTMLElement>(null);
   const closeTimer = useRef<number | undefined>(undefined);
-  const groups = useMemo(() => groupByFolder(files), [files]);
   const filteredTree = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     const visibleFiles = normalizedQuery
@@ -72,10 +61,6 @@ export function FileRail({
   const sheetDrag = useBottomSheetDrag(closeDrawer);
 
   useEffect(() => {
-    selectedPill.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-  }, [selected]);
-
-  useEffect(() => {
     if (!drawerOpen) return undefined;
     drawer.current?.focus();
     selectedRow.current?.scrollIntoView({ block: "center" });
@@ -107,45 +92,6 @@ export function FileRail({
 
   return (
     <>
-      {railVisible ? (
-        <nav className="file-rail" aria-label="変更ファイル">
-          {groups.map((group) => {
-            const path = folderParts(group.folder);
-            return (
-              <section className="folder-group" aria-label={`${group.folder} フォルダ`} key={group.folder}>
-                <div className="folder-group-heading" title={group.folder}>
-                  <Icon name="folder" size={13} />
-                  <span className="folder-path">
-                    {path.parents ? <span>{path.parents}/</span> : null}
-                    <strong>{path.current}</strong>
-                  </span>
-                  <small>{group.files.length}</small>
-                </div>
-                <div className="folder-files">
-                  {group.files.map(({ file, index }) => (
-                    <button
-                      aria-current={index === selected ? "true" : undefined}
-                      className={`file-pill ${index === selected ? "is-selected" : ""}`}
-                      key={`${file.name}-${index}`}
-                      onClick={() => onSelect(index)}
-                      ref={index === selected ? selectedPill : undefined}
-                      title={file.name}
-                      type="button"
-                    >
-                      <span className={`change-dot change-${file.type}`} />
-                      <span className="file-pill-name">{file.name.split("/").at(-1)}</span>
-                      <span className="file-pill-count">
-                        {index + 1}/{files.length}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </nav>
-      ) : null}
-
       <footer className="review-dock">
         <button type="button" onClick={onPrevious} aria-label="前のファイル">
           <Icon name="arrow" />
@@ -346,16 +292,6 @@ function TreeFile({ entry, selected, selectedRow, onSelect }: TreeFileProps) {
   );
 }
 
-function groupByFolder(files: FileDiffMetadata[], sourceFiles = files) {
-  const groups = new Map<string, { file: FileDiffMetadata; index: number }[]>();
-  files.forEach((file) => {
-    const index = sourceFiles.indexOf(file);
-    const folder = file.name.split("/").slice(0, -1).join("/") || "repository root";
-    groups.set(folder, [...(groups.get(folder) || []), { file, index }]);
-  });
-  return [...groups].map(([folder, groupedFiles]) => ({ folder, files: groupedFiles }));
-}
-
 function buildFileTree(files: FileDiffMetadata[], sourceFiles: FileDiffMetadata[]): FileTreeNode {
   const root: MutableFileTreeNode = { name: "", path: "", count: 0, children: new Map(), files: [] };
 
@@ -384,12 +320,6 @@ function buildFileTree(files: FileDiffMetadata[], sourceFiles: FileDiffMetadata[
 
 function freezeNode(node: MutableFileTreeNode): FileTreeNode {
   return { ...node, children: [...node.children.values()].map(freezeNode) };
-}
-
-function folderParts(folder: string) {
-  if (folder === "repository root") return { parents: "", current: folder };
-  const parts = folder.split("/");
-  return { parents: parts.slice(0, -1).join("/"), current: parts.at(-1) };
 }
 
 function fileParts(path: string) {

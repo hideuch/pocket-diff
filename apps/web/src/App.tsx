@@ -37,11 +37,8 @@ export function App() {
           activeRepoId={pocketDiff.activeRepoId}
           data={pocketDiff.data}
           files={pocketDiff.files}
-          current={pocketDiff.current}
           selected={pocketDiff.selected}
           onSelect={pocketDiff.setSelected}
-          onPrevious={pocketDiff.selectPrevious}
-          onNext={pocketDiff.selectNext}
         />
       ) : null}
 

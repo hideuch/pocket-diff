@@ -8,36 +8,19 @@ type DiffContentProps = {
   activeRepoId: string;
   data: DiffResponse;
   files: FileDiffMetadata[];
-  current: FileDiffMetadata;
   selected: number;
   onSelect: (index: number) => void;
-  onPrevious: () => void;
-  onNext: () => void;
 };
 
-type ViewMode = "single" | "all";
-
 const LINE_WRAP_KEY = "pocket-diff:line-wrap";
-const VIEW_MODE_KEY = "pocket-diff:view-mode";
 
 function patchBlocks(patch: string) {
   return patch.split(/(?=^diff --git )/m).filter((block) => block.startsWith("diff --git "));
 }
 
-export function DiffContent({
-  activeRepoId,
-  data,
-  files,
-  current,
-  selected,
-  onSelect,
-  onPrevious,
-  onNext,
-}: DiffContentProps) {
+export function DiffContent({ activeRepoId, data, files, selected, onSelect }: DiffContentProps) {
   const [wrapLines, setWrapLines] = useState(() => window.localStorage.getItem(LINE_WRAP_KEY) !== "scroll");
-  const [viewMode, setViewMode] = useState<ViewMode>(() =>
-    window.localStorage.getItem(VIEW_MODE_KEY) === "all" ? "all" : "single",
-  );
+  const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(() => new Set());
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
   const blocks = useMemo(() => patchBlocks(data.patch), [data.patch]);
@@ -55,28 +38,23 @@ export function DiffContent({
     });
   };
 
-  const changeViewMode = (nextMode: ViewMode) => {
-    setViewMode(nextMode);
-    window.localStorage.setItem(VIEW_MODE_KEY, nextMode);
-    if (nextMode === "all") {
-      window.requestAnimationFrame(() =>
-        document.getElementById(`diff-file-${selected}`)?.scrollIntoView({ block: "start" }),
-      );
-    }
-  };
-
   const selectAndScroll = (index: number) => {
     onSelect(index);
-    if (viewMode === "all") {
-      window.requestAnimationFrame(() =>
-        document.getElementById(`diff-file-${index}`)?.scrollIntoView({ behavior: "smooth", block: "start" }),
-      );
-    }
+    window.requestAnimationFrame(() =>
+      document.getElementById(`diff-file-${index}`)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
   };
 
-  const previous = () =>
-    viewMode === "all" ? selectAndScroll((selected - 1 + files.length) % files.length) : onPrevious();
-  const next = () => (viewMode === "all" ? selectAndScroll((selected + 1) % files.length) : onNext());
+  const previous = () => selectAndScroll((selected - 1 + files.length) % files.length);
+  const next = () => selectAndScroll((selected + 1) % files.length);
+  const toggleFile = (fileKey: string) => {
+    setCollapsedFiles((currentFiles) => {
+      const nextFiles = new Set(currentFiles);
+      if (nextFiles.has(fileKey)) nextFiles.delete(fileKey);
+      else nextFiles.add(fileKey);
+      return nextFiles;
+    });
+  };
 
   return (
     <>
@@ -98,31 +76,8 @@ export function DiffContent({
         </div>
       </section>
 
-      <div className="view-mode-bar">
-        <span>表示</span>
-        <div className="view-mode-toggle" role="group" aria-label="差分の表示方法">
-          <button
-            aria-pressed={viewMode === "single"}
-            className={viewMode === "single" ? "is-active" : ""}
-            onClick={() => changeViewMode("single")}
-            type="button"
-          >
-            1件
-          </button>
-          <button
-            aria-pressed={viewMode === "all"}
-            className={viewMode === "all" ? "is-active" : ""}
-            onClick={() => changeViewMode("all")}
-            type="button"
-          >
-            すべて
-          </button>
-        </div>
-      </div>
-
       <FileRail
         files={files}
-        railVisible={viewMode === "single"}
         selected={selected}
         updated={updated}
         onSelect={selectAndScroll}
@@ -130,34 +85,19 @@ export function DiffContent({
         onNext={next}
       />
 
-      {viewMode === "all" ? (
-        <AllDiffs
-          activeRepoId={activeRepoId}
-          blocks={blocks}
-          data={data}
-          files={files}
-          selected={selected}
-          selectedRef={selectedRef}
-          wrapLines={wrapLines}
-          onActive={onSelect}
-          onToggleLineWrap={toggleLineWrap}
-        />
-      ) : (
-        <main className="single-diff">
-          <DiffPanel
-            activeRepoId={activeRepoId}
-            file={current}
-            index={selected}
-            isCurrent
-            patchBlock={blocks[selected] || ""}
-            revision={data.revision}
-            total={files.length}
-            virtualized={false}
-            wrapLines={wrapLines}
-            onToggleLineWrap={toggleLineWrap}
-          />
-        </main>
-      )}
+      <AllDiffs
+        activeRepoId={activeRepoId}
+        blocks={blocks}
+        collapsedFiles={collapsedFiles}
+        data={data}
+        files={files}
+        selected={selected}
+        selectedRef={selectedRef}
+        wrapLines={wrapLines}
+        onActive={onSelect}
+        onToggleFile={toggleFile}
+        onToggleLineWrap={toggleLineWrap}
+      />
     </>
   );
 }
@@ -165,22 +105,26 @@ export function DiffContent({
 function AllDiffs({
   activeRepoId,
   blocks,
+  collapsedFiles,
   data,
   files,
   selected,
   selectedRef,
   wrapLines,
   onActive,
+  onToggleFile,
   onToggleLineWrap,
 }: {
   activeRepoId: string;
   blocks: string[];
+  collapsedFiles: Set<string>;
   data: DiffResponse;
   files: FileDiffMetadata[];
   selected: number;
   selectedRef: { current: number };
   wrapLines: boolean;
   onActive: (index: number) => void;
+  onToggleFile: (fileKey: string) => void;
   onToggleLineWrap: () => void;
 }) {
   const container = useRef<HTMLElement>(null);
@@ -211,21 +155,25 @@ function AllDiffs({
 
   return (
     <main className="all-diffs" ref={container}>
-      {files.map((file, index) => (
-        <DiffPanel
-          activeRepoId={activeRepoId}
-          file={file}
-          index={index}
-          isCurrent={index === selected}
-          key={`${file.name}-${index}`}
-          patchBlock={blocks[index] || ""}
-          revision={data.revision}
-          total={files.length}
-          virtualized
-          wrapLines={wrapLines}
-          onToggleLineWrap={onToggleLineWrap}
-        />
-      ))}
+      {files.map((file, index) => {
+        const fileKey = `${activeRepoId}:${file.prevName || ""}:${file.name}`;
+        return (
+          <DiffPanel
+            activeRepoId={activeRepoId}
+            expanded={!collapsedFiles.has(fileKey)}
+            file={file}
+            index={index}
+            isCurrent={index === selected}
+            key={fileKey}
+            patchBlock={blocks[index] || ""}
+            revision={data.revision}
+            total={files.length}
+            wrapLines={wrapLines}
+            onToggleExpanded={() => onToggleFile(fileKey)}
+            onToggleLineWrap={onToggleLineWrap}
+          />
+        );
+      })}
     </main>
   );
 }
