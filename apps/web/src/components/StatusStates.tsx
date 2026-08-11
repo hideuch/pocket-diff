@@ -15,7 +15,7 @@ export function EmptyState({ noRepositories = false }: EmptyStateProps) {
       <p>
         {noRepositories
           ? "起動時に --root でGitリポジトリを含むフォルダを指定してください。"
-          : "Claude がファイルを編集すると、ここに自動で表示されます。この画面は開いたままで大丈夫です。"}
+          : "ファイルを編集すると、ここに自動で表示されます。この画面は開いたままで大丈夫です。"}
       </p>
     </main>
   );
