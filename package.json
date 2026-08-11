@@ -4,12 +4,14 @@
   "private": true,
   "scripts": {
     "build": "turbo build",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "check": "pnpm format:check && pnpm lint && pnpm licenses:check && pnpm typecheck && pnpm test && pnpm build",
     "dev": "turbo dev",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "lint": "turbo lint",
     "lint:fix": "turbo lint:fix",
+    "licenses:check": "pnpm licenses:generate && git diff --exit-code -- THIRD_PARTY_NOTICES.md THIRD_PARTY_LICENSES.txt",
+    "licenses:generate": "node scripts/generate-third-party-licenses.mjs",
     "prepare": "husky",
     "test": "turbo test",
     "typecheck": "turbo typecheck"

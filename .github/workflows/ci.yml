@@ -27,6 +27,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Check dependency licenses
+        run: pnpm licenses:check
+
       - name: Build embedded UI
         run: pnpm build
 

@@ -142,3 +142,15 @@ Node.js、pnpm、miseが必要なのは開発時だけです。配布する単�
 - Windows: amd64
 
 リリースバイナリにはReact UIが埋め込まれているため、利用端末のNode.jsには依存しません。Git差分は端末のGitコマンドを使用し、未追跡ファイルも表示します。ただし、1 MiBを超える未追跡ファイルとバイナリ内容は読み込みません。
+
+## ライセンス
+
+Pocket Diffは[Apache License 2.0](LICENSE)で公開しているオープンソースソフトウェアです。
+配布バイナリに含まれる依存パッケージは[Third-party notices](THIRD_PARTY_NOTICES.md)で確認でき、ライセンス全文は`THIRD_PARTY_LICENSES.txt`と各Releaseアーカイブへ同梱しています。
+
+依存関係を更新した場合は、次のコマンドで一覧とライセンス全文を再生成してください。未許可または未判定のライセンスはCIで拒否されます。
+
+```bash
+pnpm licenses:generate
+pnpm licenses:check
+```

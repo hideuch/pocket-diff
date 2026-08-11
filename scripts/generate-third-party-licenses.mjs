@@ -1,0 +1,177 @@
+import { execFileSync } from "node:child_process";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const goRoot = join(root, "apps", "pocket-diff");
+const allowedLicenses = new Set(["Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "MIT"]);
+const licenseFilePattern = /^(licen[cs]e|copying|notice)(\..*)?$/i;
+
+function command(commandName, arguments_, cwd = root) {
+  return execFileSync(commandName, arguments_, {
+    cwd,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+}
+
+function normalizeLicense(value) {
+  const normalized = value.trim().toLowerCase();
+  const known = {
+    "apache-2.0": "Apache-2.0",
+    "bsd-2-clause": "BSD-2-Clause",
+    "bsd-3-clause": "BSD-3-Clause",
+    isc: "ISC",
+    mit: "MIT",
+  };
+  return known[normalized] ?? value.trim();
+}
+
+function classifyLicense(text) {
+  if (/Apache License[\s\S]{0,80}Version 2\.0|Licensed under the Apache License, Version 2\.0/i.test(text)) {
+    return "Apache-2.0";
+  }
+  if (/Permission is hereby granted, free of charge, to any person obtaining\s+a copy/i.test(text)) {
+    return "MIT";
+  }
+  if (/Redistribution and use in source and binary forms/i.test(text)) {
+    return /Neither the name|names of (?:its|the) contributors/i.test(text) ? "BSD-3-Clause" : "BSD-2-Clause";
+  }
+  if (/Permission to use, copy, modify, and\/or distribute this software/i.test(text)) {
+    return "ISC";
+  }
+  return "Unknown";
+}
+
+function normalizeText(text) {
+  return text
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .trim();
+}
+
+function licenseFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && licenseFilePattern.test(entry.name))
+    .map((entry) => ({ name: entry.name, text: normalizeText(readFileSync(join(directory, entry.name), "utf8")) }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function parseJSONStream(source) {
+  return JSON.parse(`[${source.replace(/}\n{/g, "},{")}]`);
+}
+
+function webDependencies() {
+  const report = JSON.parse(command("pnpm", ["licenses", "list", "--prod", "--json"]));
+  const dependencies = new Map();
+  for (const [reportedLicense, packages] of Object.entries(report)) {
+    for (const package_ of packages) {
+      const license = normalizeLicense(package_.license ?? reportedLicense);
+      const key = `${package_.name}@${package_.versions.join(",")}`;
+      if (dependencies.has(key)) continue;
+      const files = licenseFiles(package_.paths[0]);
+      if (files.length === 0) {
+        const readmePath = join(package_.paths[0], "README.md");
+        try {
+          const readme = readFileSync(readmePath, "utf8");
+          const licenseSection = readme.match(/^#{1,3}\s+.*licen[cs]e.*$[\s\S]*$/im)?.[0];
+          if (licenseSection) {
+            files.push({ name: "README.md (license section)", text: normalizeText(licenseSection) });
+          }
+        } catch {
+          // The missing license file is reported by the validation below.
+        }
+      }
+      dependencies.set(key, {
+        ecosystem: "npm",
+        name: package_.name,
+        version: package_.versions.join(", "),
+        license,
+        source: package_.homepage ?? `https://www.npmjs.com/package/${package_.name}`,
+        files,
+      });
+    }
+  }
+  return [...dependencies.values()];
+}
+
+function goDependencies() {
+  const packages = parseJSONStream(command("go", ["list", "-deps", "-json", "./cmd/pocket-diff"], goRoot));
+  const modules = new Map();
+  for (const package_ of packages) {
+    const module = package_.Module?.Replace ?? package_.Module;
+    if (!module || module.Main || modules.has(module.Path)) continue;
+    const files = licenseFiles(module.Dir);
+    const licenseFile = files.find((file) => /^licen[cs]e/i.test(file.name)) ?? files[0];
+    const license = licenseFile ? classifyLicense(licenseFile.text) : "Unknown";
+    modules.set(module.Path, {
+      ecosystem: "Go",
+      name: module.Path,
+      version: module.Version ?? "local replacement",
+      license,
+      source: `https://pkg.go.dev/${module.Path}${module.Version ? `@${module.Version}` : ""}`,
+      files,
+    });
+  }
+  return [...modules.values()];
+}
+
+const dependencies = [...goDependencies(), ...webDependencies()].sort((left, right) =>
+  left.name.localeCompare(right.name),
+);
+const rejected = dependencies.filter(
+  (dependency) => !allowedLicenses.has(dependency.license) || dependency.files.length === 0,
+);
+if (rejected.length > 0) {
+  for (const dependency of rejected) {
+    console.error(`Unapproved or missing license: ${dependency.name}@${dependency.version} (${dependency.license})`);
+  }
+  process.exit(1);
+}
+
+const generatedWarning = "<!-- Generated by scripts/generate-third-party-licenses.mjs. Do not edit manually. -->";
+const noticeLines = [
+  generatedWarning,
+  "# Third-party notices",
+  "",
+  "Pocket Diff includes the following third-party software in its distributed binary.",
+  "The complete license and notice texts are available in `THIRD_PARTY_LICENSES.txt`.",
+  "",
+  "| Ecosystem | Component | Version | License |",
+  "| --- | --- | --- | --- |",
+];
+for (const dependency of dependencies) {
+  noticeLines.push(
+    `| ${dependency.ecosystem} | [${dependency.name}](${dependency.source}) | ${dependency.version} | ${dependency.license} |`,
+  );
+}
+noticeLines.push("");
+
+const licenseLines = [
+  "POCKET DIFF THIRD-PARTY LICENSES",
+  "",
+  "This file is generated. Each section contains the license and notice files shipped by the dependency.",
+  "",
+];
+for (const dependency of dependencies) {
+  licenseLines.push("=".repeat(80));
+  licenseLines.push(`${dependency.name}@${dependency.version}`);
+  licenseLines.push(`Ecosystem: ${dependency.ecosystem}`);
+  licenseLines.push(`License: ${dependency.license}`);
+  licenseLines.push(`Source: ${dependency.source}`);
+  for (const file of dependency.files) {
+    licenseLines.push("");
+    licenseLines.push(`--- ${file.name} ---`);
+    licenseLines.push(file.text);
+  }
+  licenseLines.push("");
+}
+
+writeFileSync(join(root, "THIRD_PARTY_NOTICES.md"), `${noticeLines.join("\n")}\n`);
+writeFileSync(join(root, "THIRD_PARTY_LICENSES.txt"), `${licenseLines.join("\n").trimEnd()}\n`);
+command("pnpm", ["exec", "oxfmt", "THIRD_PARTY_NOTICES.md"]);
+console.log(`Generated notices for ${dependencies.length} dependencies at ${relative(process.cwd(), root) || "."}`);
