@@ -372,6 +372,12 @@ button:focus-visible {
   align-items: end;
   background: rgba(24, 33, 45, 0.42);
   backdrop-filter: blur(4px);
+  animation: sheet-backdrop-in 320ms ease-out both;
+}
+
+.file-drawer-backdrop[data-state="closing"] {
+  pointer-events: none;
+  animation: sheet-backdrop-out 280ms ease-in both;
 }
 
 .file-drawer {
@@ -387,7 +393,22 @@ button:focus-visible {
   border-radius: 24px 24px 0 0;
   background: #f8fafc;
   box-shadow: 0 -24px 70px rgba(20, 31, 48, 0.24);
-  animation: picker-in 180ms ease-out;
+  transform: translateY(var(--sheet-drag-y, 0px));
+  transition: transform 260ms cubic-bezier(0.2, 0.75, 0.25, 1);
+  animation: sheet-in 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.file-drawer[data-state="closing"] {
+  animation: sheet-out 280ms cubic-bezier(0.4, 0, 0.8, 0.2) both;
+}
+
+.file-drawer.is-dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
+.file-drawer.has-interacted[data-state="open"] {
+  animation: none;
 }
 
 .file-drawer-header {
@@ -1023,6 +1044,12 @@ button:focus-visible {
   align-items: end;
   background: rgba(24, 33, 45, 0.4);
   backdrop-filter: blur(4px);
+  animation: sheet-backdrop-in 320ms ease-out both;
+}
+
+.picker-backdrop[data-state="closing"] {
+  pointer-events: none;
+  animation: sheet-backdrop-out 280ms ease-in both;
 }
 .repo-picker {
   width: min(100%, 580px);
@@ -1037,14 +1064,40 @@ button:focus-visible {
   border-radius: 24px 24px 0 0;
   background: #f8fafc;
   box-shadow: 0 -24px 70px rgba(20, 31, 48, 0.2);
-  animation: picker-in 180ms ease-out;
+  transform: translateY(var(--sheet-drag-y, 0px));
+  transition: transform 260ms cubic-bezier(0.2, 0.75, 0.25, 1);
+  animation: sheet-in 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.repo-picker[data-state="closing"] {
+  animation: sheet-out 280ms cubic-bezier(0.4, 0, 0.8, 0.2) both;
+}
+
+.repo-picker.is-dragging {
+  cursor: grabbing;
+  transition: none;
+}
+
+.repo-picker.has-interacted[data-state="open"] {
+  animation: none;
 }
 .picker-grabber {
+  width: 72px;
+  height: 22px;
+  margin: -2px auto 4px;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.picker-grabber::before {
   width: 38px;
   height: 4px;
-  margin: 1px auto 13px;
   border-radius: 99px;
-  background: #c9d1dc;
+  background: #b9c3cf;
+  content: "";
 }
 .picker-header {
   display: flex;
@@ -1184,10 +1237,35 @@ button:focus-visible {
   font-weight: 700;
 }
 
-@keyframes picker-in {
+@keyframes sheet-in {
   from {
-    transform: translateY(24px);
-    opacity: 0.6;
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(var(--sheet-drag-y, 0px));
+  }
+}
+
+@keyframes sheet-out {
+  from {
+    transform: translateY(var(--sheet-drag-y, 0px));
+  }
+
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes sheet-backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-backdrop-out {
+  to {
+    opacity: 0;
   }
 }
 

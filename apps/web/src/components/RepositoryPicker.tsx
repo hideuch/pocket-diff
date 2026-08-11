@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { BOTTOM_SHEET_CLOSE_MS, useBottomSheetDrag } from "../hooks/useBottomSheetDrag";
 import type { Repository } from "../types";
 import { Icon } from "./Icon";
 
@@ -12,42 +13,62 @@ type RepositoryPickerProps = {
 
 export function RepositoryPicker({ repositories, activeId, onClose, onSelect, onRefresh }: RepositoryPickerProps) {
   const [query, setQuery] = useState("");
+  const [closing, setClosing] = useState(false);
   const dialogRef = useRef<HTMLElement>(null);
+  const closeTimer = useRef<number | undefined>(undefined);
   const filtered = repositories.filter((repository) =>
     `${repository.name} ${repository.label} ${repository.branch}`.toLowerCase().includes(query.toLowerCase()),
   );
+
+  const requestClose = useCallback(() => {
+    if (closing) return;
+    setClosing(true);
+    closeTimer.current = window.setTimeout(onClose, BOTTOM_SHEET_CLOSE_MS);
+  }, [closing, onClose]);
+  const sheetDrag = useBottomSheetDrag(requestClose);
+
+  const selectRepository = (id: string) => {
+    if (closing) return;
+    setClosing(true);
+    closeTimer.current = window.setTimeout(() => onSelect(id), BOTTOM_SHEET_CLOSE_MS);
+  };
 
   useEffect(() => {
     dialogRef.current?.focus();
   }, []);
 
   useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => event.key === "Escape" && onClose();
+    const closeOnEscape = (event: KeyboardEvent) => event.key === "Escape" && requestClose();
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
+  }, [requestClose]);
+
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
 
   return (
     <div
       className="picker-backdrop"
+      data-state={closing ? "closing" : "open"}
       role="presentation"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+      onMouseDown={(event) => event.target === event.currentTarget && requestClose()}
     >
       <section
         ref={dialogRef}
-        className="repo-picker"
+        className={`repo-picker ${sheetDrag.dragging ? "is-dragging" : ""} ${sheetDrag.interacted ? "has-interacted" : ""}`}
+        data-state={closing ? "closing" : "open"}
         role="dialog"
         aria-modal="true"
         aria-labelledby="repo-picker-title"
+        style={sheetDrag.sheetStyle}
         tabIndex={-1}
       >
-        <div className="picker-grabber" aria-hidden="true" />
+        <div aria-hidden="true" className="picker-grabber" {...sheetDrag.handleProps} />
         <header className="picker-header">
           <div>
             <p className="eyebrow">ON THIS DEVICE</p>
             <h2 id="repo-picker-title">リポジトリを選ぶ</h2>
           </div>
-          <button type="button" onClick={onClose} aria-label="閉じる">
+          <button type="button" onClick={requestClose} aria-label="閉じる">
             <Icon name="close" />
           </button>
         </header>
@@ -60,7 +81,7 @@ export function RepositoryPicker({ repositories, activeId, onClose, onSelect, on
             <button
               className={`repo-row ${repository.id === activeId ? "is-active" : ""}`}
               key={repository.id}
-              onClick={() => onSelect(repository.id)}
+              onClick={() => selectRepository(repository.id)}
               type="button"
             >
               <span className="repo-row-icon">

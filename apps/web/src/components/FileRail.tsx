@@ -1,6 +1,7 @@
 import type { FileDiffMetadata } from "@pierre/diffs";
 import type { RefObject } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BOTTOM_SHEET_CLOSE_MS, useBottomSheetDrag } from "../hooks/useBottomSheetDrag";
 import { Icon } from "./Icon";
 
 type FileRailProps = {
@@ -14,11 +15,13 @@ type FileRailProps = {
 
 export function FileRail({ files, selected, updated, onSelect, onPrevious, onNext }: FileRailProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerClosing, setDrawerClosing] = useState(false);
   const [query, setQuery] = useState("");
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
   const selectedPill = useRef<HTMLButtonElement>(null);
   const selectedRow = useRef<HTMLButtonElement>(null);
   const drawer = useRef<HTMLElement>(null);
+  const closeTimer = useRef<number | undefined>(undefined);
   const groups = useMemo(() => groupByFolder(files), [files]);
   const filteredTree = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -42,8 +45,22 @@ export function FileRail({ files, selected, updated, onSelect, onPrevious, onNex
       return next;
     });
     setQuery("");
+    window.clearTimeout(closeTimer.current);
+    sheetDrag.reset();
+    setDrawerClosing(false);
     setDrawerOpen(true);
   };
+
+  const closeDrawer = useCallback(() => {
+    if (!drawerOpen || drawerClosing) return;
+    setDrawerClosing(true);
+    closeTimer.current = window.setTimeout(() => {
+      setDrawerOpen(false);
+      setDrawerClosing(false);
+    }, BOTTOM_SHEET_CLOSE_MS);
+  }, [drawerClosing, drawerOpen]);
+
+  const sheetDrag = useBottomSheetDrag(closeDrawer);
 
   useEffect(() => {
     selectedPill.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
@@ -55,17 +72,19 @@ export function FileRail({ files, selected, updated, onSelect, onPrevious, onNex
     selectedRow.current?.scrollIntoView({ block: "center" });
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const closeOnEscape = (event: KeyboardEvent) => event.key === "Escape" && setDrawerOpen(false);
+    const closeOnEscape = (event: KeyboardEvent) => event.key === "Escape" && closeDrawer();
     window.addEventListener("keydown", closeOnEscape);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [drawerOpen]);
+  }, [closeDrawer, drawerOpen]);
+
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
 
   const selectFile = (index: number) => {
     onSelect(index);
-    setDrawerOpen(false);
+    closeDrawer();
   };
 
   const toggleFolder = (path: string) => {
@@ -149,25 +168,28 @@ export function FileRail({ files, selected, updated, onSelect, onPrevious, onNex
       {drawerOpen ? (
         <div
           className="file-drawer-backdrop"
+          data-state={drawerClosing ? "closing" : "open"}
           role="presentation"
-          onMouseDown={(event) => event.target === event.currentTarget && setDrawerOpen(false)}
+          onMouseDown={(event) => event.target === event.currentTarget && closeDrawer()}
         >
           <section
             aria-labelledby="file-drawer-title"
             aria-modal="true"
-            className="file-drawer"
+            className={`file-drawer ${sheetDrag.dragging ? "is-dragging" : ""} ${sheetDrag.interacted ? "has-interacted" : ""}`}
+            data-state={drawerClosing ? "closing" : "open"}
             ref={drawer}
             role="dialog"
+            style={sheetDrag.sheetStyle}
             tabIndex={-1}
           >
-            <div className="picker-grabber" aria-hidden="true" />
+            <div aria-hidden="true" className="picker-grabber" {...sheetDrag.handleProps} />
             <header className="file-drawer-header">
               <div>
                 <p className="eyebrow">WORKING TREE</p>
                 <h2 id="file-drawer-title">変更ファイル</h2>
               </div>
               <span className="file-total">{files.length}</span>
-              <button type="button" onClick={() => setDrawerOpen(false)} aria-label="閉じる">
+              <button type="button" onClick={closeDrawer} aria-label="閉じる">
                 <Icon name="close" />
               </button>
             </header>
