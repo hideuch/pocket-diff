@@ -8,12 +8,13 @@ import (
 )
 
 type Config struct {
-	Roots     []string `json:"roots"`
-	Depth     int      `json:"depth"`
-	Port      int      `json:"port"`
-	BasePath  string   `json:"basePath"`
-	Service   bool     `json:"service"`
-	Tailscale bool     `json:"tailscale"`
+	Roots      []string `json:"roots"`
+	Depth      int      `json:"depth"`
+	Port       int      `json:"port"`
+	BasePath   string   `json:"basePath"`
+	Service    bool     `json:"service"`
+	Tailscale  bool     `json:"tailscale"`
+	AutoUpdate bool     `json:"autoUpdate"`
 }
 
 func Home() (string, error) {
@@ -43,6 +44,12 @@ func Load(filename string) (Config, error) {
 	var value Config
 	if err := json.Unmarshal(content, &value); err != nil {
 		return Config{}, fmt.Errorf("read config: %w", err)
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(content, &fields) == nil {
+		if _, exists := fields["autoUpdate"]; !exists {
+			value.AutoUpdate = true
+		}
 	}
 	return value, nil
 }

@@ -4,8 +4,8 @@ set -eu
 repository="hidenariTakeuchi/diff"
 install_directory="${POCKET_DIFF_INSTALL_DIR:-$HOME/.local/bin}"
 
-command -v gh >/dev/null 2>&1 || {
-  echo "GitHub CLI (gh) is required to download this private release." >&2
+command -v curl >/dev/null 2>&1 || {
+  echo "curl is required to download Pocket Diff." >&2
   exit 1
 }
 
@@ -26,7 +26,9 @@ temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT INT TERM
 
 echo "Downloading Pocket Diff for ${target_os}/${target_arch} ..."
-gh release download --repo "$repository" --pattern "$archive" --pattern checksums.txt --dir "$temporary_directory"
+release_url="https://github.com/${repository}/releases/latest/download"
+curl --fail --location --silent --show-error --output "$temporary_directory/$archive" "$release_url/$archive"
+curl --fail --location --silent --show-error --output "$temporary_directory/checksums.txt" "$release_url/checksums.txt"
 
 (
   cd "$temporary_directory"

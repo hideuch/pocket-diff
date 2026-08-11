@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -52,7 +54,20 @@ jobs:
           cd release
           sha256sum * > checksums.txt
 
+      - name: Attest release archives
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-checksums: release/checksums.txt
+
+      - name: Add Sigstore bundle to release
+        env:
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: cp "$BUNDLE_PATH" release/attestation.sigstore.json
+
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" release/* --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* --draft --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+          gh release edit "$GITHUB_REF_NAME" --draft=false

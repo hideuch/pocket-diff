@@ -8,15 +8,14 @@ macOS、Linux、Windows向けの単一Goバイナリとして動作します。�
 
 - Git
 - Tailscale（ログイン済み）
-- privateリポジトリとReleaseを読めるGitHub CLI（インストール時のみ）
+- curl（インストール時のみ）
 
 ## ワンコマンドセットアップ
 
-privateリポジトリから最新版を取得し、そのまま対話セットアップを開始します。
+GitHub Releaseから最新版を取得し、そのまま対話セットアップを開始します。
 
 ```bash
-gh api -H "Accept: application/vnd.github.raw+json" \
-  repos/hidenariTakeuchi/diff/contents/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/hidenariTakeuchi/diff/main/install.sh | sh
 ```
 
 対話形式で次の項目を設定します。
@@ -27,6 +26,7 @@ gh api -H "Accept: application/vnd.github.raw+json" \
 - localhostポート（既定は`4173`）
 - OSログイン時の自動起動
 - Tailscale Serve
+- 署名を検証する自動アップデート（既定で有効）
 
 セットアップ後は、同じTailnetに参加しているスマホから表示された`https://<device>.<tailnet>.ts.net/diff/`を開きます。macOSではLaunchAgent、Linuxではsystemd user service、Windowsではタスクスケジューラへ登録します。
 
@@ -53,6 +53,28 @@ pocket-diff setup \
 ```bash
 pocket-diff doctor
 ```
+
+## 自動アップデートと署名検証
+
+リリース版は起動時と6時間ごとに更新を確認します。更新が見つかった場合は、ダウンロードしたOS・CPU向けアーカイブについて次をすべて検証してから実行ファイルを差し替えます。
+
+- SHA-256ダイジェスト
+- Sigstore署名と証明書チェーン
+- Rekor透明性ログと署名時刻
+- 署名元が`hidenariTakeuchi/diff`の保護されたRelease workflowであること
+- 署名対象が該当する`v*`タグと公開リポジトリであること
+- 現在より新しいSemantic Versionであり、ダウングレードではないこと
+
+検証に失敗した場合は更新を中止し、現在のバイナリをそのまま使用します。長期秘密鍵はリポジトリやGitHub Secretsへ保存せず、GitHub Actions OIDCによるkeyless署名を使用します。
+
+手動で確認・更新する場合：
+
+```bash
+pocket-diff update --check
+pocket-diff update
+```
+
+自動更新を無効化する場合はセットアップ時に`--no-auto-update`を指定するか、サービスの環境変数へ`POCKET_DIFF_AUTO_UPDATE=0`を設定します。
 
 ## 手動起動
 

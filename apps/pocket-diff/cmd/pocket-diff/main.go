@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"github.com/hidenariTakeuchi/diff/apps/pocket-diff/internal/config"
 	"github.com/hidenariTakeuchi/diff/apps/pocket-diff/internal/server"
 	"github.com/hidenariTakeuchi/diff/apps/pocket-diff/internal/setup"
+	"github.com/hidenariTakeuchi/diff/apps/pocket-diff/internal/updater"
 	"github.com/hidenariTakeuchi/diff/apps/pocket-diff/internal/web"
 )
 
@@ -57,6 +59,8 @@ func run(arguments []string) error {
 		return setup.Run(options, os.Stdin, os.Stdout)
 	case "doctor":
 		return doctor()
+	case "update":
+		return update(arguments)
 	case "version", "--version", "-v":
 		fmt.Println("pocket-diff", version, runtime.GOOS+"/"+runtime.GOARCH)
 		return nil
@@ -73,12 +77,14 @@ func serve(arguments []string) error {
 	var roots rootsFlag
 	var configPath, host, basePath string
 	var port, depth int
+	autoUpdate := true
 	set.Var(&roots, "root", "Git repository parent folder (repeatable)")
 	set.StringVar(&configPath, "config", "", "configuration file")
 	set.StringVar(&host, "host", "127.0.0.1", "listen host")
 	set.StringVar(&basePath, "base-path", "", "URL base path")
 	set.IntVar(&port, "port", 4173, "listen port")
 	set.IntVar(&depth, "depth", 4, "repository scan depth")
+	set.BoolVar(&autoUpdate, "auto-update", true, "install signed updates automatically")
 	if err := set.Parse(arguments); err != nil {
 		return err
 	}
@@ -87,7 +93,7 @@ func serve(arguments []string) error {
 		if err != nil {
 			return err
 		}
-		roots, depth, port, basePath = value.Roots, value.Depth, value.Port, value.BasePath
+		roots, depth, port, basePath, autoUpdate = value.Roots, value.Depth, value.Port, value.BasePath, value.AutoUpdate
 	}
 	if len(roots) == 0 {
 		if configured := os.Getenv("DIFF_ROOTS"); configured != "" {
@@ -108,8 +114,62 @@ func serve(arguments []string) error {
 	address := fmt.Sprintf("%s:%d", host, port)
 	handler := server.New(catalog.New(roots, depth), web.Assets(), basePath)
 	httpServer := &http.Server{Addr: address, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
+	if disabled := strings.ToLower(os.Getenv("POCKET_DIFF_AUTO_UPDATE")); disabled == "0" || disabled == "false" {
+		autoUpdate = false
+	}
+	if autoUpdate && version != "dev" {
+		go watchForUpdates(version)
+	}
 	fmt.Printf("Pocket Diff: http://%s%s/\nSearch roots: %s\nScan depth: %d\n", address, basePath, strings.Join(roots, ", "), depth)
 	return httpServer.ListenAndServe()
+}
+
+func update(arguments []string) error {
+	set := flag.NewFlagSet("update", flag.ContinueOnError)
+	checkOnly := set.Bool("check", false, "only check whether an update is available")
+	if err := set.Parse(arguments); err != nil {
+		return err
+	}
+	client := updater.DefaultClient()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	if *checkOnly {
+		release, newer, err := client.Check(ctx, version)
+		if err != nil {
+			return err
+		}
+		if newer {
+			fmt.Printf("Update available: %s -> %s\n", version, release.TagName)
+		} else {
+			fmt.Printf("Pocket Diff is current: %s\n", version)
+		}
+		return nil
+	}
+	result, err := client.Update(ctx, version, false)
+	if err != nil {
+		return err
+	}
+	if result.Updated {
+		fmt.Printf("Updated Pocket Diff: %s -> %s (Sigstore verified)\n", result.Current, result.Latest)
+	} else {
+		fmt.Printf("Pocket Diff is current: %s\n", result.Current)
+	}
+	return nil
+}
+
+func watchForUpdates(current string) {
+	client := updater.DefaultClient()
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		result, err := client.Update(ctx, current, true)
+		cancel()
+		if err != nil && !errors.Is(err, updater.ErrDevelopmentBuild) {
+			fmt.Fprintln(os.Stderr, "Pocket Diff auto-update:", err)
+		} else if result.Updated {
+			return
+		}
+		time.Sleep(6 * time.Hour)
+	}
 }
 
 func doctor() error {
@@ -142,5 +202,6 @@ func usage() {
   pocket-diff setup [--root PATH] [--depth N] [--base-path /diff] [--port 4173]
   pocket-diff serve [--config PATH | --root PATH]
   pocket-diff doctor
+  pocket-diff update [--check]
   pocket-diff version`)
 }

@@ -26,14 +26,15 @@ const (
 )
 
 type Options struct {
-	Roots       []string
-	Depth       int
-	Port        int
-	BasePath    string
-	Yes         bool
-	DryRun      bool
-	NoService   bool
-	NoTailscale bool
+	Roots        []string
+	Depth        int
+	Port         int
+	BasePath     string
+	Yes          bool
+	DryRun       bool
+	NoService    bool
+	NoTailscale  bool
+	NoAutoUpdate bool
 }
 
 type stringList []string
@@ -62,6 +63,7 @@ func ParseOptions(arguments []string) (Options, error) {
 	set.BoolVar(&options.DryRun, "dry-run", false, "show changes without applying")
 	set.BoolVar(&options.NoService, "no-service", false, "do not configure startup service")
 	set.BoolVar(&options.NoTailscale, "no-tailscale", false, "do not configure Tailscale Serve")
+	set.BoolVar(&options.NoAutoUpdate, "no-auto-update", false, "disable signed automatic updates")
 	if err := set.Parse(arguments); err != nil {
 		return Options{}, err
 	}
@@ -77,7 +79,7 @@ func Run(options Options, input io.Reader, output io.Writer) error {
 	}
 	value := config.Config{
 		Roots: options.Roots, Depth: options.Depth, Port: options.Port, BasePath: options.BasePath,
-		Service: !options.NoService, Tailscale: !options.NoTailscale,
+		Service: !options.NoService, Tailscale: !options.NoTailscale, AutoUpdate: !options.NoAutoUpdate,
 	}
 	if len(value.Roots) == 0 {
 		value.Roots = []string{root}
@@ -104,7 +106,7 @@ func Run(options Options, input io.Reader, output io.Writer) error {
 		value.Roots[index] = absolute
 	}
 
-	fmt.Fprintf(output, "\nConfiguration\n  Git roots: %s\n  Scan depth: %d\n  Local port: %d\n  URL path: %s\n", strings.Join(value.Roots, ", "), value.Depth, value.Port, displayPath(value.BasePath))
+	fmt.Fprintf(output, "\nConfiguration\n  Git roots: %s\n  Scan depth: %d\n  Local port: %d\n  URL path: %s\n  Signed auto-update: %t\n", strings.Join(value.Roots, ", "), value.Depth, value.Port, displayPath(value.BasePath), value.AutoUpdate)
 	home, err := config.Home()
 	if err != nil {
 		return err
@@ -175,6 +177,11 @@ func prompt(value config.Config, input io.Reader, output io.Writer) (config.Conf
 	value.BasePath = server.NormalizeBasePath(basePath)
 	value.Service = !strings.HasPrefix(strings.ToLower(service), "n")
 	value.Tailscale = !strings.HasPrefix(strings.ToLower(tailscale), "n")
+	autoUpdate, err := ask(reader, output, "署名を検証して自動アップデートしますか？", "Y/n")
+	if err != nil {
+		return value, err
+	}
+	value.AutoUpdate = !strings.HasPrefix(strings.ToLower(autoUpdate), "n")
 	return value, nil
 }
 
