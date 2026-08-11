@@ -21,6 +21,12 @@ jobs:
           go-version-file: apps/pocket-diff/go.mod
           cache: false
 
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
       - name: Build embedded UI
         run: pnpm build
 

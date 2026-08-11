@@ -28,8 +28,19 @@ export function RepositoryPicker({ repositories, activeId, onClose, onSelect, on
   }, [onClose]);
 
   return (
-    <div className="picker-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section ref={dialogRef} className="repo-picker" role="dialog" aria-modal="true" aria-labelledby="repo-picker-title" tabIndex={-1}>
+    <div
+      className="picker-backdrop"
+      role="presentation"
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <section
+        ref={dialogRef}
+        className="repo-picker"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="repo-picker-title"
+        tabIndex={-1}
+      >
         <div className="picker-grabber" aria-hidden="true" />
         <header className="picker-header">
           <div>

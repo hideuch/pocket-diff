@@ -49,7 +49,7 @@ export function usePocketDiff() {
       try {
         const response = await fetch(`${API_BASE}/diff?repo=${encodeURIComponent(activeRepoId)}`, {
           cache: "no-cache",
-          headers: revisionRef.current ? { "If-None-Match": `\"${revisionRef.current}\"` } : {},
+          headers: revisionRef.current ? { "If-None-Match": `"${revisionRef.current}"` } : {},
         });
         if (response.status === 304) return;
         const next = (await response.json()) as DiffResponse & ApiError;

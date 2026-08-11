@@ -6,6 +6,8 @@
   "scripts": {
     "build": "vite build --base=./",
     "dev": "vite",
+    "lint": "oxlint . --max-warnings 0",
+    "lint:fix": "oxlint . --fix --max-warnings 0",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
