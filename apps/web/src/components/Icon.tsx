@@ -10,6 +10,7 @@ const iconPaths = {
   folder: <path d="M3 6.5h7l2 2h9v9.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
   copy: <path d="M9 8h10v12H9zM5 16H4V4h10v1" />,
   check: <path d="m5 12 4 4L19 6" />,
+  document: <path d="M7 3h7l4 4v14H7zM14 3v5h5M10 12h5M10 16h5" />,
   wrap: <path d="M4 6h16M4 11h12a4 4 0 0 1 0 8h-1M15 16l-3 3 3 3M4 19h5" />,
   chevron: <path d="m9 18 6-6-6-6" />,
   arrow: <path d="m15 18-6-6 6-6" />,

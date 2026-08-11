@@ -81,6 +81,40 @@ func TestReadFileVersionRejectsPathsOutsideRepository(t *testing.T) {
 	}
 }
 
+func TestIsChangedFileOnlyAcceptsWorkingTreeChanges(t *testing.T) {
+	repository := t.TempDir()
+	gitTest(t, repository, "init", "-q")
+	gitTest(t, repository, "config", "user.name", "Pocket Diff Test")
+	gitTest(t, repository, "config", "user.email", "test@example.invalid")
+	writeTestFile(t, filepath.Join(repository, "changed.txt"), "before\n")
+	writeTestFile(t, filepath.Join(repository, "unchanged.txt"), "private\n")
+	writeTestFile(t, filepath.Join(repository, "renamed.txt"), "rename me\n")
+	writeTestFile(t, filepath.Join(repository, "deleted.txt"), "delete me\n")
+	gitTest(t, repository, "add", ".")
+	gitTest(t, repository, "commit", "-qm", "initial")
+	writeTestFile(t, filepath.Join(repository, "changed.txt"), "after\n")
+	gitTest(t, repository, "mv", "renamed.txt", "moved.txt")
+	if err := os.Remove(filepath.Join(repository, "deleted.txt")); err != nil {
+		t.Fatal(err)
+	}
+
+	if !IsChangedFile(repository, "changed.txt") {
+		t.Fatal("changed file was rejected")
+	}
+	if IsChangedFile(repository, "unchanged.txt") {
+		t.Fatal("unchanged file was accepted")
+	}
+	if !IsChangedFile(repository, "moved.txt") {
+		t.Fatal("renamed file was rejected")
+	}
+	if !IsChangedFile(repository, "deleted.txt") {
+		t.Fatal("deleted file was rejected")
+	}
+	if IsChangedFile(repository, "../outside.txt") {
+		t.Fatal("path traversal was accepted")
+	}
+}
+
 func gitTest(t *testing.T, directory string, arguments ...string) {
 	t.Helper()
 	command := exec.Command("git", arguments...)

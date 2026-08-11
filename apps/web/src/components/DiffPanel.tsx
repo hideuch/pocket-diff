@@ -1,7 +1,8 @@
 import type { FileDiffMetadata } from "@pierre/diffs";
-import { FileDiff } from "@pierre/diffs/react";
+import { File, FileDiff } from "@pierre/diffs/react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import type { ApiError, FileResponse } from "../types";
 import { Icon } from "./Icon";
 
 type DiffPanelProps = {
@@ -50,14 +51,16 @@ export function DiffPanel({
   onToggleLineWrap,
 }: DiffPanelProps) {
   const [bodyMounted, setBodyMounted] = useState(true);
+  const [fullFileView, setFullFileView] = useState(false);
   const [pathCopied, setPathCopied] = useState(false);
   const collapseTimer = useRef<number | undefined>(undefined);
   const copyTimer = useRef<number | undefined>(undefined);
   const isBinary = /^Binary files .+ differ$|^GIT binary patch$/m.test(patchBlock);
   const isImage = isImageFile(file.name);
   const isRename = file.type === "rename-pure" || file.type === "rename-changed";
+  const canShowFullFile = !isImage && !isBinary;
   const showsTextDiff = !isImage && !isBinary && file.type !== "rename-pure" && file.hunks.length > 0;
-  const body = (
+  const diffBody = (
     <>
       {isRename ? <RenameNotice currentName={file.name} previousName={file.prevName} /> : null}
       {isImage ? (
@@ -93,6 +96,11 @@ export function DiffPanel({
         </div>
       )}
     </>
+  );
+  const body = fullFileView ? (
+    <FullFileView activeRepoId={activeRepoId} file={file} revision={revision} wrapLines={wrapLines} />
+  ) : (
+    diffBody
   );
 
   useEffect(() => {
@@ -131,7 +139,7 @@ export function DiffPanel({
 
   return (
     <article
-      className={`diff-stage diff-file-panel ${isCurrent ? "is-current" : ""} ${expanded ? "is-expanded" : "is-collapsed"}`}
+      className={`diff-stage diff-file-panel change-${file.type} ${isCurrent ? "is-current" : ""} ${expanded ? "is-expanded" : "is-collapsed"}`}
       data-diff-index={index}
       id={`diff-file-${index}`}
     >
@@ -147,7 +155,19 @@ export function DiffPanel({
           <span className="all-diff-position">
             {index + 1}/{total}
           </span>
-          <span className="change-label">{file.type}</span>
+          <span className="visually-hidden">変更種別: {getChangeTypeLabel(file.type)}</span>
+          {canShowFullFile ? (
+            <button
+              aria-label={fullFileView ? `${file.name}の差分を表示` : `${file.name}のファイル全体を表示`}
+              aria-pressed={fullFileView}
+              className="full-file-toggle"
+              onClick={() => setFullFileView((current) => !current)}
+              title={fullFileView ? "差分表示に戻す" : "ファイル全体を表示"}
+              type="button"
+            >
+              <Icon name="document" size={15} />
+            </button>
+          ) : null}
           <button
             aria-label={pathCopied ? `${file.name}をコピーしました` : `${file.name}をコピー`}
             className={`copy-path-toggle ${pathCopied ? "is-copied" : ""}`}
@@ -157,7 +177,7 @@ export function DiffPanel({
           >
             <Icon name={pathCopied ? "check" : "copy"} size={15} />
           </button>
-          {showsTextDiff ? (
+          {showsTextDiff || fullFileView ? (
             <button
               aria-label={wrapLines ? "コードの折り返しを無効にする" : "コードの折り返しを有効にする"}
               aria-pressed={wrapLines}
@@ -192,6 +212,127 @@ export function DiffPanel({
       </div>
     </article>
   );
+}
+
+type FullFileState =
+  | { status: "loading" }
+  | { status: "ready"; data: FileResponse }
+  | { status: "error"; message: string };
+
+function FullFileView({
+  activeRepoId,
+  file,
+  revision,
+  wrapLines,
+}: {
+  activeRepoId: string;
+  file: FileDiffMetadata;
+  revision: string;
+  wrapLines: boolean;
+}) {
+  const deleted = file.type === "deleted";
+  const source = deleted ? "head" : "working";
+  const name = deleted ? file.prevName || file.name : file.name;
+  const [state, setState] = useState<FullFileState>({ status: "loading" });
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const load = async () => {
+      setState({ status: "loading" });
+      try {
+        const params = new URLSearchParams({ repo: activeRepoId, path: name, source, revision });
+        const response = await fetch(`${import.meta.env.BASE_URL}api/file?${params}`, {
+          cache: "no-cache",
+          signal: controller.signal,
+        });
+        const result = (await response.json()) as FileResponse & ApiError;
+        if (!response.ok) throw new Error(result.detail || result.error || "ファイルを読み込めませんでした");
+        setState({ status: "ready", data: result });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setState({
+          status: "error",
+          message: error instanceof Error ? error.message : "ファイルを読み込めませんでした",
+        });
+      }
+    };
+    load();
+    return () => controller.abort();
+  }, [activeRepoId, name, revision, source]);
+
+  if (state.status === "loading") {
+    return (
+      <div className="full-file-loading" role="status">
+        <span />
+        <span />
+        <span />
+      </div>
+    );
+  }
+  if (state.status === "error") {
+    return (
+      <div className="special-file-view" role="alert">
+        <div className="special-view-icon">
+          <Icon name="document" size={22} />
+        </div>
+        <strong>ファイル全体を表示できません</strong>
+        <p>{state.message}</p>
+      </div>
+    );
+  }
+
+  const lines = state.data.content === "" ? 0 : state.data.content.split("\n").length;
+  return (
+    <div className={`full-file-view ${wrapLines ? "is-wrapped" : "is-scrollable"}`}>
+      <div className="full-file-meta">
+        <span>
+          <Icon name="document" size={14} />
+          FILE CONTENT
+        </span>
+        <span>{state.data.source === "head" ? "削除前 (HEAD)" : "作業ツリー"}</span>
+        <small>
+          {lines} lines · {formatBytes(state.data.size)}
+        </small>
+      </div>
+      {state.data.content === "" ? (
+        <div className="full-file-empty">空のファイルです</div>
+      ) : (
+        <File
+          key={`${name}-${revision}-${wrapLines ? "wrap" : "scroll"}`}
+          className="full-file-code"
+          disableWorkerPool
+          file={{ name, contents: state.data.content }}
+          options={{
+            disableFileHeader: true,
+            disableLineNumbers: false,
+            overflow: wrapLines ? "wrap" : "scroll",
+            stickyHeader: false,
+            theme: "pierre-light",
+            themeType: "light",
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function getChangeTypeLabel(type: FileDiffMetadata["type"]) {
+  switch (type) {
+    case "new":
+      return "追加";
+    case "deleted":
+      return "削除";
+    case "rename-pure":
+    case "rename-changed":
+      return "名前変更";
+    default:
+      return "変更";
+  }
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
 }
 
 async function copyText(value: string) {

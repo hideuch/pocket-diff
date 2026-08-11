@@ -120,6 +120,18 @@ func ReadFileVersion(repositoryPath, name, source string) ([]byte, error) {
 	}
 }
 
+// IsChangedFile reports whether name is currently part of the repository's
+// working-tree changes. It keeps preview endpoints from becoming arbitrary
+// repository file readers when their query parameters are edited directly.
+func IsChangedFile(repositoryPath, name string) bool {
+	cleanName := filepath.ToSlash(filepath.Clean(filepath.FromSlash(name)))
+	if name == "" || cleanName == "." || cleanName == ".." || strings.HasPrefix(cleanName, "../") || filepath.IsAbs(name) {
+		return false
+	}
+	status, err := runGit(repositoryPath, false, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", cleanName)
+	return err == nil && status != ""
+}
+
 func CountPatch(patch string) Summary {
 	var summary Summary
 	for _, line := range strings.Split(patch, "\n") {

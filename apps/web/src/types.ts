@@ -21,3 +21,10 @@ export type ApiError = {
   error?: string;
   detail?: string;
 };
+
+export type FileResponse = {
+  content: string;
+  path: string;
+  source: "working" | "head";
+  size: number;
+};

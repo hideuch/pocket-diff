@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -10,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/hideuch/pocket-diff/apps/pocket-diff/internal/catalog"
 	"github.com/hideuch/pocket-diff/apps/pocket-diff/internal/gitdiff"
@@ -79,9 +81,56 @@ func (s *Server) ServeHTTP(response http.ResponseWriter, request *http.Request) 
 	case "/api/image":
 		s.serveImage(response, request)
 		return
+	case "/api/file":
+		s.serveFile(response, request)
+		return
 	}
 
 	s.serveAsset(response, request, localPath)
+}
+
+const maxTextPreviewBytes = 2 * 1024 * 1024
+
+func (s *Server) serveFile(response http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		response.Header().Set("Allow", "GET")
+		writeJSON(response, http.StatusMethodNotAllowed, map[string]string{"error": "対応していないリクエストです"})
+		return
+	}
+	repositoryPath, ok := s.catalog.Resolve(request.URL.Query().Get("repo"))
+	if !ok {
+		writeJSON(response, http.StatusNotFound, map[string]string{"error": "リポジトリが見つかりません"})
+		return
+	}
+	name := request.URL.Query().Get("path")
+	source := request.URL.Query().Get("source")
+	if !gitdiff.IsChangedFile(repositoryPath, name) {
+		writeJSON(response, http.StatusNotFound, map[string]string{"error": "変更中のファイルが見つかりません"})
+		return
+	}
+	content, err := gitdiff.ReadFileVersion(repositoryPath, name, source)
+	if err != nil {
+		writeJSON(response, http.StatusNotFound, map[string]string{"error": "ファイルを読み込めませんでした"})
+		return
+	}
+	if len(content) > maxTextPreviewBytes {
+		writeJSON(response, http.StatusRequestEntityTooLarge, map[string]string{
+			"error":  "ファイルが大きすぎます",
+			"detail": "ファイル全体の表示は2MBまで対応しています",
+		})
+		return
+	}
+	if !utf8.Valid(content) || bytes.IndexByte(content, 0) >= 0 {
+		writeJSON(response, http.StatusUnsupportedMediaType, map[string]string{"error": "バイナリファイルはテキスト表示できません"})
+		return
+	}
+	response.Header().Set("Cache-Control", "private, no-cache")
+	writeJSON(response, http.StatusOK, map[string]any{
+		"content": string(content),
+		"path":    name,
+		"source":  source,
+		"size":    len(content),
+	})
 }
 
 var imageMediaTypes = map[string]string{
@@ -111,6 +160,10 @@ func (s *Server) serveImage(response http.ResponseWriter, request *http.Request)
 	repositoryPath, ok := s.catalog.Resolve(request.URL.Query().Get("repo"))
 	if !ok {
 		writeJSON(response, http.StatusNotFound, map[string]string{"error": "リポジトリが見つかりません"})
+		return
+	}
+	if !gitdiff.IsChangedFile(repositoryPath, name) {
+		writeJSON(response, http.StatusNotFound, map[string]string{"error": "変更中の画像が見つかりません"})
 		return
 	}
 	content, err := gitdiff.ReadFileVersion(repositoryPath, name, request.URL.Query().Get("source"))
