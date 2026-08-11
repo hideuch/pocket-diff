@@ -7,7 +7,7 @@ macOS、Linux、Windows向けの単一Goバイナリとして動作します。�
 ## 必要なもの
 
 - Git
-- Tailscale（ログイン済み）
+- Tailscaleアカウント（CLIがない場合はセットアップ中に導入可能）
 - curl（インストール時のみ）
 
 ## ワンコマンドセットアップ
@@ -30,6 +30,8 @@ curl -fsSL https://raw.githubusercontent.com/hideuch/pocket-diff/main/install.sh
 
 セットアップ後は、同じTailnetに参加しているスマホから表示された`https://<device>.<tailnet>.ts.net/diff/`を開きます。macOSではLaunchAgent、Linuxではsystemd user service、Windowsではタスクスケジューラへ登録します。
 
+Tailscale CLIが見つからない場合は、対話セットアップがインストールするか確認します。macOSは公式パッケージをSHA-256検証後に導入し、Linuxは公式インストーラー、Windowsはwingetを使用します。OSの権限確認、Tailscaleの利用規約への同意、Tailnetへのログインは画面の案内に従ってください。
+
 すでにバイナリを取得している場合は次を実行します。
 
 ```bash
@@ -45,8 +47,11 @@ pocket-diff setup \
   --root ~/work \
   --depth 2 \
   --base-path /diff \
-  --port 4173
+  --port 4173 \
+  --install-tailscale
 ```
+
+非対話実行でTailscaleも必要な場合は`--install-tailscale`を明示してください。`--yes`だけでは外部ソフトウェアを導入しません。Tailscaleを使わないローカル構成は`--no-tailscale`で作成できます。
 
 環境を確認するには次を実行します。
 
@@ -75,6 +80,24 @@ pocket-diff update
 ```
 
 自動更新を無効化する場合はセットアップ時に`--no-auto-update`を指定するか、サービスの環境変数へ`POCKET_DIFF_AUTO_UPDATE=0`を設定します。
+
+## アンインストール
+
+実行前に削除対象を確認できます。
+
+```bash
+pocket-diff uninstall --dry-run
+pocket-diff uninstall
+```
+
+確認なしで実行する場合は`--yes`、リポジトリの探索設定などを残して再インストールしやすくする場合は`--keep-config`を指定します。
+
+```bash
+pocket-diff uninstall --yes
+pocket-diff uninstall --keep-config
+```
+
+アンインストールはPocket Diffの自動起動サービス、管理ファイル、Pocket Diffが設定したTailscale Serveパスだけを削除します。Gitリポジトリ、Tailscale本体、同じ端末上のほかのServeパスは削除しません。
 
 ## 手動起動
 

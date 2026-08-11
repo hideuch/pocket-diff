@@ -18,6 +18,7 @@ import (
 	"github.com/hideuch/pocket-diff/apps/pocket-diff/internal/config"
 	"github.com/hideuch/pocket-diff/apps/pocket-diff/internal/server"
 	"github.com/hideuch/pocket-diff/apps/pocket-diff/internal/setup"
+	"github.com/hideuch/pocket-diff/apps/pocket-diff/internal/uninstall"
 	"github.com/hideuch/pocket-diff/apps/pocket-diff/internal/updater"
 	"github.com/hideuch/pocket-diff/apps/pocket-diff/internal/web"
 )
@@ -61,6 +62,12 @@ func run(arguments []string) error {
 		return doctor()
 	case "update":
 		return update(arguments)
+	case "uninstall":
+		options, err := uninstall.ParseOptions(arguments)
+		if err != nil {
+			return err
+		}
+		return uninstall.Run(options, os.Stdin, os.Stdout)
 	case "version", "--version", "-v":
 		fmt.Println("pocket-diff", version, runtime.GOOS+"/"+runtime.GOARCH)
 		return nil
@@ -203,5 +210,6 @@ func usage() {
   pocket-diff serve [--config PATH | --root PATH]
   pocket-diff doctor
   pocket-diff update [--check]
+  pocket-diff uninstall [--keep-config] [--dry-run] [--yes]
   pocket-diff version`)
 }

@@ -8,14 +8,14 @@ import (
 )
 
 func TestParseOptionsSupportsRepeatableRoots(t *testing.T) {
-	options, err := ParseOptions([]string{"--root", "./one", "--root=./two", "--base-path=diff/", "--port=5000", "--yes", "--dry-run"})
+	options, err := ParseOptions([]string{"--root", "./one", "--root=./two", "--base-path=diff/", "--port=5000", "--yes", "--dry-run", "--install-tailscale"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(options.Roots) != 2 || options.Roots[0] != absolute(t, "./one") || options.Roots[1] != absolute(t, "./two") {
 		t.Fatalf("unexpected roots: %v", options.Roots)
 	}
-	if options.BasePath != "/diff" || options.Port != 5000 || !options.Yes || !options.DryRun {
+	if options.BasePath != "/diff" || options.Port != 5000 || !options.Yes || !options.DryRun || !options.InstallTailscale {
 		t.Fatalf("unexpected options: %+v", options)
 	}
 }
@@ -39,6 +39,16 @@ func TestDryRunDoesNotInstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(output.String(), "[dry-run] Install binary") || !strings.Contains(output.String(), "Pocket Diff is ready") {
+		t.Fatalf("unexpected output: %s", output.String())
+	}
+}
+
+func TestTailscaleInstallerDryRun(t *testing.T) {
+	var output bytes.Buffer
+	if err := installTailscale(true, &output); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "Install:") {
 		t.Fatalf("unexpected output: %s", output.String())
 	}
 }

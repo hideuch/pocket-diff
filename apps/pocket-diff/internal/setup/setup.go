@@ -26,15 +26,16 @@ const (
 )
 
 type Options struct {
-	Roots        []string
-	Depth        int
-	Port         int
-	BasePath     string
-	Yes          bool
-	DryRun       bool
-	NoService    bool
-	NoTailscale  bool
-	NoAutoUpdate bool
+	Roots            []string
+	Depth            int
+	Port             int
+	BasePath         string
+	Yes              bool
+	DryRun           bool
+	NoService        bool
+	NoTailscale      bool
+	InstallTailscale bool
+	NoAutoUpdate     bool
 }
 
 type stringList []string
@@ -63,6 +64,7 @@ func ParseOptions(arguments []string) (Options, error) {
 	set.BoolVar(&options.DryRun, "dry-run", false, "show changes without applying")
 	set.BoolVar(&options.NoService, "no-service", false, "do not configure startup service")
 	set.BoolVar(&options.NoTailscale, "no-tailscale", false, "do not configure Tailscale Serve")
+	set.BoolVar(&options.InstallTailscale, "install-tailscale", false, "install Tailscale when it is missing")
 	set.BoolVar(&options.NoAutoUpdate, "no-auto-update", false, "disable signed automatic updates")
 	if err := set.Parse(arguments); err != nil {
 		return Options{}, err
@@ -73,6 +75,7 @@ func ParseOptions(arguments []string) (Options, error) {
 }
 
 func Run(options Options, input io.Reader, output io.Writer) error {
+	reader := bufio.NewReader(input)
 	root, err := defaultRoot()
 	if err != nil {
 		return err
@@ -85,7 +88,7 @@ func Run(options Options, input io.Reader, output io.Writer) error {
 		value.Roots = []string{root}
 	}
 	if !options.Yes {
-		value, err = prompt(value, input, output)
+		value, err = prompt(value, reader, output)
 		if err != nil {
 			return err
 		}
@@ -130,7 +133,7 @@ func Run(options Options, input io.Reader, output io.Writer) error {
 	}
 	url := ""
 	if value.Tailscale {
-		url, err = configureTailscale(value, options.DryRun, output)
+		url, err = configureTailscale(value, options, reader, output)
 		if err != nil {
 			return err
 		}
@@ -144,8 +147,7 @@ func Run(options Options, input io.Reader, output io.Writer) error {
 	return nil
 }
 
-func prompt(value config.Config, input io.Reader, output io.Writer) (config.Config, error) {
-	reader := bufio.NewReader(input)
+func prompt(value config.Config, reader *bufio.Reader, output io.Writer) (config.Config, error) {
 	fmt.Fprint(output, "\nPocket Diff setup\n\n")
 	root, err := ask(reader, output, "Gitフォルダの親ディレクトリ（複数はカンマ区切り）", strings.Join(value.Roots, ","))
 	if err != nil {
@@ -315,24 +317,25 @@ func configureService(binaryPath, configPath, home string, dryRun bool, output i
 	}
 }
 
-func configureTailscale(value config.Config, dryRun bool, output io.Writer) (string, error) {
-	if _, err := exec.LookPath("tailscale"); err != nil {
-		fmt.Fprintln(output, "Tailscale CLI was not found. Install and sign in, then rerun setup.")
-		return "", nil
+func configureTailscale(value config.Config, options Options, reader *bufio.Reader, output io.Writer) (string, error) {
+	tailscale, err := ensureTailscale(options, reader, output)
+	if err != nil || tailscale == "" {
+		return "", err
 	}
 	arguments := []string{"serve", "--bg"}
 	if value.BasePath != "" {
 		arguments = append(arguments, "--set-path="+value.BasePath)
 	}
 	arguments = append(arguments, fmt.Sprintf("http://127.0.0.1:%d", value.Port))
-	if dryRun {
+	if options.DryRun {
 		fmt.Fprintf(output, "[dry-run] tailscale %s\n", strings.Join(arguments, " "))
 		return "(dry-run)", nil
 	}
-	if err := run(true, "tailscale", arguments...); err != nil {
+	if err := runTailscale(tailscale, true, arguments...); err != nil {
 		return "", err
 	}
-	command := exec.Command("tailscale", "status", "--json")
+	command := exec.Command(tailscale, "status", "--json")
+	command.Env = append(os.Environ(), "TAILSCALE_BE_CLI=1")
 	status, err := command.Output()
 	if err != nil {
 		return "", nil
