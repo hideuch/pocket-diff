@@ -3,6 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { DiffResponse } from "../types";
 import { DiffPanel } from "./DiffPanel";
 import { FileRail } from "./FileRail";
+import { formatReviewCommentsForAgent, useBranchReviewComments } from "./ReviewComments";
+import { Icon } from "./Icon";
 
 type DiffContentProps = {
   activeRepoId: string;
@@ -32,6 +34,10 @@ function storedFileSet(key: string) {
 export function DiffContent({ activeRepoId, data, files, selected, onSelect }: DiffContentProps) {
   const [noWrapFiles, setNoWrapFiles] = useState<Set<string>>(() => storedFileSet(NO_WRAP_FILES_KEY));
   const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(() => new Set());
+  const [reviewFileKey, setReviewFileKey] = useState<string | null>(null);
+  const [commentsCopied, setCommentsCopied] = useState(false);
+  const commentsCopyTimer = useRef<number | undefined>(undefined);
+  const reviewComments = useBranchReviewComments(activeRepoId, data.branch);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
   const blocks = useMemo(() => patchBlocks(data.patch), [data.patch]);
@@ -40,6 +46,26 @@ export function DiffContent({ activeRepoId, data, files, selected, onSelect }: D
         new Date(data.generatedAt),
       )
     : "—";
+
+  useEffect(() => () => window.clearTimeout(commentsCopyTimer.current), []);
+
+  const copyReviewComments = async () => {
+    if (reviewComments.length === 0) return;
+    const text = formatReviewCommentsForAgent({
+      repository: data.repo,
+      branch: data.branch,
+      base: data.base,
+      comments: reviewComments,
+    });
+    try {
+      await navigator.clipboard.writeText(text);
+      setCommentsCopied(true);
+      window.clearTimeout(commentsCopyTimer.current);
+      commentsCopyTimer.current = window.setTimeout(() => setCommentsCopied(false), 1800);
+    } catch {
+      setCommentsCopied(false);
+    }
+  };
 
   const toggleLineWrap = (fileKey: string) => {
     setNoWrapFiles((currentFiles) => {
@@ -105,12 +131,29 @@ export function DiffContent({ activeRepoId, data, files, selected, onSelect }: D
         data={data}
         files={files}
         noWrapFiles={noWrapFiles}
+        reviewFileKey={reviewFileKey}
         selected={selected}
         selectedRef={selectedRef}
         onActive={onSelect}
         onToggleFile={toggleFile}
         onToggleLineWrap={toggleLineWrap}
+        onReviewFileChange={setReviewFileKey}
       />
+
+      {reviewComments.length > 0 ? (
+        <>
+          <div className="review-export-clearance" aria-hidden="true" />
+          <button
+            aria-label={`${reviewComments.length}件のコメントをコピー`}
+            className={`review-export-bar ${commentsCopied ? "is-copied" : ""}`}
+            onClick={copyReviewComments}
+            type="button"
+          >
+            <Icon name={commentsCopied ? "check" : "copy"} size={14} />
+            <span>{commentsCopied ? "コピーしました" : `${reviewComments.length}件のコメントをコピー`}</span>
+          </button>
+        </>
+      ) : null}
     </>
   );
 }
@@ -122,11 +165,13 @@ function AllDiffs({
   data,
   files,
   noWrapFiles,
+  reviewFileKey,
   selected,
   selectedRef,
   onActive,
   onToggleFile,
   onToggleLineWrap,
+  onReviewFileChange,
 }: {
   activeRepoId: string;
   blocks: string[];
@@ -134,11 +179,13 @@ function AllDiffs({
   data: DiffResponse;
   files: FileDiffMetadata[];
   noWrapFiles: Set<string>;
+  reviewFileKey: string | null;
   selected: number;
   selectedRef: { current: number };
   onActive: (index: number) => void;
   onToggleFile: (fileKey: string) => void;
   onToggleLineWrap: (fileKey: string) => void;
+  onReviewFileChange: (fileKey: string | null) => void;
 }) {
   const container = useRef<HTMLElement>(null);
 
@@ -173,6 +220,7 @@ function AllDiffs({
         return (
           <DiffPanel
             activeRepoId={activeRepoId}
+            branch={data.branch}
             expanded={!collapsedFiles.has(fileKey)}
             file={file}
             index={index}
@@ -180,10 +228,13 @@ function AllDiffs({
             key={fileKey}
             patchBlock={blocks[index] || ""}
             revision={data.revision}
+            reviewActive={reviewFileKey === fileKey}
             total={files.length}
             wrapLines={!noWrapFiles.has(fileKey)}
             onToggleExpanded={() => onToggleFile(fileKey)}
             onToggleLineWrap={() => onToggleLineWrap(fileKey)}
+            onActivateReview={() => onReviewFileChange(fileKey)}
+            onDeactivateReview={() => onReviewFileChange(null)}
           />
         );
       })}

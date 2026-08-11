@@ -1,26 +1,45 @@
-import type { FileDiffMetadata } from "@pierre/diffs";
+import type { DiffLineAnnotation, FileDiffMetadata, LineAnnotation, SelectedLineRange } from "@pierre/diffs";
 import { File, FileDiff } from "@pierre/diffs/react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { ApiError, FileResponse } from "../types";
 import { Icon } from "./Icon";
+import {
+  normalizeReviewRange,
+  ReviewCommentAnnotation,
+  ReviewCommentComposer,
+  type ReviewComment,
+  type ReviewCommentView,
+  useReviewComments,
+} from "./ReviewComments";
 
 type DiffPanelProps = {
   activeRepoId: string;
+  branch: string;
   expanded: boolean;
   file: FileDiffMetadata;
   index: number;
   isCurrent: boolean;
   patchBlock: string;
   revision: string;
+  reviewActive: boolean;
   total: number;
   wrapLines: boolean;
   onToggleExpanded: () => void;
   onToggleLineWrap: () => void;
+  onActivateReview: () => void;
+  onDeactivateReview: () => void;
 };
 
 const IMAGE_EXTENSIONS = new Set(["avif", "bmp", "gif", "ico", "jpeg", "jpg", "png", "svg", "webp"]);
 const FILE_COLLAPSE_MS = 240;
+const LINE_NUMBER_INTERACTION_CSS = `
+[data-line-number-content] {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: pointer;
+}`;
 const visibilityCallbacks = new WeakMap<Element, (visible: boolean) => void>();
 let visibilityObserver: IntersectionObserver | undefined;
 
@@ -39,20 +58,26 @@ function isImageFile(name: string) {
 
 export function DiffPanel({
   activeRepoId,
+  branch,
   expanded,
   file,
   index,
   isCurrent,
   patchBlock,
   revision,
+  reviewActive,
   total,
   wrapLines,
   onToggleExpanded,
   onToggleLineWrap,
+  onActivateReview,
+  onDeactivateReview,
 }: DiffPanelProps) {
   const [bodyMounted, setBodyMounted] = useState(true);
   const [fullFileView, setFullFileView] = useState(false);
   const [pathCopied, setPathCopied] = useState(false);
+  const [selectedLines, setSelectedLines] = useState<SelectedLineRange | null>(null);
+  const [selectionComplete, setSelectionComplete] = useState(false);
   const collapseTimer = useRef<number | undefined>(undefined);
   const copyTimer = useRef<number | undefined>(undefined);
   const isBinary = /^Binary files .+ differ$|^GIT binary patch$/m.test(patchBlock);
@@ -60,6 +85,15 @@ export function DiffPanel({
   const isRename = file.type === "rename-pure" || file.type === "rename-changed";
   const canShowFullFile = !isImage && !isBinary;
   const showsTextDiff = !isImage && !isBinary && file.type !== "rename-pure" && file.hunks.length > 0;
+  const currentView: ReviewCommentView = fullFileView ? "file" : "diff";
+  const { comments, addComment, removeComment } = useReviewComments(activeRepoId, branch, file.name, revision);
+  const diffAnnotations: DiffLineAnnotation<ReviewComment>[] = comments
+    .filter((comment) => comment.view === "diff")
+    .map((comment) => ({
+      lineNumber: comment.end,
+      side: comment.endSide || comment.side || "additions",
+      metadata: comment,
+    }));
   const diffBody = (
     <>
       {isRename ? <RenameNotice currentName={file.name} previousName={file.prevName} /> : null}
@@ -79,8 +113,13 @@ export function DiffPanel({
       ) : (
         <div className="diff-frame" key={`${file.name}-${revision}-${wrapLines ? "wrap" : "scroll"}`}>
           <FileDiff
+            lineAnnotations={diffAnnotations}
+            selectedLines={selectedLines}
             fileDiff={file}
             disableWorkerPool
+            renderAnnotation={(annotation) => (
+              <ReviewCommentAnnotation comment={annotation.metadata} onDelete={removeComment} />
+            )}
             options={{
               diffStyle: "unified",
               overflow: wrapLines ? "wrap" : "scroll",
@@ -91,6 +130,10 @@ export function DiffPanel({
               stickyHeader: false,
               theme: "pierre-light",
               themeType: "light",
+              controlledSelection: true,
+              lineHoverHighlight: "number",
+              unsafeCSS: LINE_NUMBER_INTERACTION_CSS,
+              onLineNumberClick: ({ annotationSide, lineNumber }) => selectLine(lineNumber, annotationSide),
             }}
           />
         </div>
@@ -98,7 +141,16 @@ export function DiffPanel({
     </>
   );
   const body = fullFileView ? (
-    <FullFileView activeRepoId={activeRepoId} file={file} revision={revision} wrapLines={wrapLines} />
+    <FullFileView
+      activeRepoId={activeRepoId}
+      comments={comments}
+      file={file}
+      revision={revision}
+      selectedLines={selectedLines}
+      wrapLines={wrapLines}
+      onDeleteComment={removeComment}
+      onSelectLine={(lineNumber) => selectLine(lineNumber)}
+    />
   ) : (
     diffBody
   );
@@ -106,6 +158,18 @@ export function DiffPanel({
   useEffect(() => {
     if (expanded) setBodyMounted(true);
   }, [expanded]);
+
+  useEffect(() => {
+    if (!reviewActive) {
+      setSelectedLines(null);
+      setSelectionComplete(false);
+    }
+  }, [reviewActive]);
+
+  useEffect(() => {
+    setSelectedLines(null);
+    setSelectionComplete(false);
+  }, [revision]);
 
   useEffect(
     () => () => {
@@ -137,6 +201,37 @@ export function DiffPanel({
     window.requestAnimationFrame(onToggleExpanded);
   };
 
+  const toggleFullFileView = () => {
+    setSelectedLines(null);
+    setSelectionComplete(false);
+    onDeactivateReview();
+    setFullFileView((current) => !current);
+  };
+
+  const selectLine = (lineNumber: number, side?: SelectedLineRange["side"]) => {
+    if (!reviewActive || !selectedLines || selectionComplete || selectedLines.side !== side) {
+      onActivateReview();
+      setSelectedLines({ start: lineNumber, side, end: lineNumber, endSide: side });
+      setSelectionComplete(false);
+      return;
+    }
+    setSelectedLines({ ...selectedLines, end: lineNumber, endSide: side });
+    setSelectionComplete(true);
+  };
+
+  const clearSelection = () => {
+    setSelectedLines(null);
+    setSelectionComplete(false);
+    onDeactivateReview();
+  };
+
+  const saveComment = (commentBody: string) => {
+    if (!selectedLines) return;
+    const range = normalizeReviewRange(selectedLines);
+    addComment({ ...range, body: commentBody, view: currentView });
+    clearSelection();
+  };
+
   return (
     <article
       className={`diff-stage diff-file-panel change-${file.type} ${isCurrent ? "is-current" : ""} ${expanded ? "is-expanded" : "is-collapsed"}`}
@@ -161,7 +256,7 @@ export function DiffPanel({
               aria-label={fullFileView ? `${file.name}の差分を表示` : `${file.name}のファイル全体を表示`}
               aria-pressed={fullFileView}
               className="full-file-toggle"
-              onClick={() => setFullFileView((current) => !current)}
+              onClick={toggleFullFileView}
               title={fullFileView ? "差分表示に戻す" : "ファイル全体を表示"}
               type="button"
             >
@@ -203,6 +298,12 @@ export function DiffPanel({
       </div>
       <div aria-hidden={!expanded} className={`diff-panel-collapse ${expanded ? "is-expanded" : ""}`} inert={!expanded}>
         <div className="diff-panel-collapse-inner">
+          {reviewActive && selectedLines && !selectionComplete ? (
+            <div className="review-selection-hint" role="status">
+              <Icon name="comment" size={14} />
+              開始行 L{selectedLines.start} を選択中。終了行をタップ
+            </div>
+          ) : null}
           {bodyMounted ? (
             <VirtualizedDiffBody estimatedHeight={estimateBodyHeight(file, isImage, isBinary)}>
               {body}
@@ -210,6 +311,15 @@ export function DiffPanel({
           ) : null}
         </div>
       </div>
+      {reviewActive && selectedLines && selectionComplete ? (
+        <ReviewCommentComposer
+          fileName={file.name}
+          range={normalizeReviewRange(selectedLines)}
+          view={currentView}
+          onCancel={clearSelection}
+          onSave={saveComment}
+        />
+      ) : null}
     </article>
   );
 }
@@ -221,19 +331,30 @@ type FullFileState =
 
 function FullFileView({
   activeRepoId,
+  comments,
   file,
   revision,
+  selectedLines,
   wrapLines,
+  onDeleteComment,
+  onSelectLine,
 }: {
   activeRepoId: string;
+  comments: ReviewComment[];
   file: FileDiffMetadata;
   revision: string;
+  selectedLines: SelectedLineRange | null;
   wrapLines: boolean;
+  onDeleteComment: (id: string) => void;
+  onSelectLine: (lineNumber: number) => void;
 }) {
   const deleted = file.type === "deleted";
   const source = deleted ? "head" : "working";
   const name = deleted ? file.prevName || file.name : file.name;
   const [state, setState] = useState<FullFileState>({ status: "loading" });
+  const fileAnnotations: LineAnnotation<ReviewComment>[] = comments
+    .filter((comment) => comment.view === "file")
+    .map((comment) => ({ lineNumber: comment.end, metadata: comment }));
 
   useEffect(() => {
     const controller = new AbortController();
@@ -302,6 +423,11 @@ function FullFileView({
           className="full-file-code"
           disableWorkerPool
           file={{ name, contents: state.data.content }}
+          lineAnnotations={fileAnnotations}
+          selectedLines={selectedLines}
+          renderAnnotation={(annotation) => (
+            <ReviewCommentAnnotation comment={annotation.metadata} onDelete={onDeleteComment} />
+          )}
           options={{
             disableFileHeader: true,
             disableLineNumbers: false,
@@ -309,6 +435,10 @@ function FullFileView({
             stickyHeader: false,
             theme: "pierre-light",
             themeType: "light",
+            controlledSelection: true,
+            lineHoverHighlight: "number",
+            unsafeCSS: LINE_NUMBER_INTERACTION_CSS,
+            onLineNumberClick: ({ lineNumber }) => onSelectLine(lineNumber),
           }}
         />
       )}
