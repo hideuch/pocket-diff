@@ -4,27 +4,71 @@
 
 macOS、Linux、Windowsで動作するNode.jsアプリです。起動時に許可したフォルダからGitリポジトリを検出し、スマホ画面で切り替えられます。ブラウザから任意の端末内パスを指定することはできず、絶対パスもAPIに含めません。
 
-## セットアップ
+## ワンコマンドセットアップ（推奨）
+
+各端末にNode.js 20以降、Git、Tailscaleをインストールし、Tailscaleへログインしておきます。privateリポジトリへアクセスできるGitHub認証も必要です。
+
+```bash
+npx --yes github:hidenariTakeuchi/diff setup
+```
+
+対話形式で次の項目を設定します。
+
+- Gitリポジトリを置いている親フォルダ（複数指定可）
+- リポジトリを探索する深さ
+- Tailnet内のURLパス（既定は `/diff`）
+- localhostポート（既定は `4173`）
+- OSログイン時の自動起動
+- Tailscale Serve
+
+セットアップ後は、同じTailnetに参加しているスマホから表示された `https://<device>.<tailnet>.ts.net/diff/` を開きます。macOSではLaunchAgent、Linuxではsystemd user service、Windowsではタスクスケジューラへ登録します。再度実行すると設定とアプリを更新できます。
+
+privateリポジトリのcloneで認証エラーになる場合は、GitHub CLIで一度だけGit認証を設定します。
+
+```bash
+gh auth login
+gh auth setup-git
+```
+
+すべて引数で指定することもできます。
+
+```bash
+npx --yes github:hidenariTakeuchi/diff setup \
+  --yes \
+  --root ~/repos \
+  --root ~/work \
+  --depth 2 \
+  --base-path /diff \
+  --port 4173
+```
+
+環境を確認するには次を実行します。
+
+```bash
+npx --yes github:hidenariTakeuchi/diff doctor
+```
+
+## 手動セットアップ
 
 各端末にNode.js 20以降、Git、Tailscaleをインストールします。
 
 ```bash
 git clone https://github.com/hidenariTakeuchi/diff.git
-cd pocket-diff
+cd diff
 npm install
-npm run build
+npm run build -- --base=/diff/
 ```
 
 Gitリポジトリを保存している親フォルダを指定して起動します。`--root` は複数指定できます。
 
 ```bash
-npm start -- --root /path/to/projects --root /path/to/work
+npm start -- --root /path/to/projects --root /path/to/work --base-path /diff
 ```
 
 Windows PowerShellでも同じ形式です。
 
 ```powershell
-npm start -- --root C:\Users\you\source --root D:\work
+npm start -- --root C:\Users\you\source --root D:\work --base-path /diff
 ```
 
 探索の深さは既定で4階層、最大8階層です。大きな親フォルダでは小さくしてください。

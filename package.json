@@ -3,9 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "pocket-diff": "./bin/pocket-diff.js"
+  },
+  "files": [
+    "bin",
+    "cli",
+    "dist",
+    "server",
+    "README.md"
+  ],
   "scripts": {
     "dev": "node server/index.js --dev",
     "build": "vite build",
+    "prepare": "npm run build",
     "start": "node server/index.js",
     "test": "node --test"
   },
