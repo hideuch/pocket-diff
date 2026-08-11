@@ -6,6 +6,7 @@ import { Icon } from "./Icon";
 
 type FileRailProps = {
   files: FileDiffMetadata[];
+  railVisible?: boolean;
   selected: number;
   updated: string;
   onSelect: (index: number) => void;
@@ -13,7 +14,15 @@ type FileRailProps = {
   onNext: () => void;
 };
 
-export function FileRail({ files, selected, updated, onSelect, onPrevious, onNext }: FileRailProps) {
+export function FileRail({
+  files,
+  railVisible = true,
+  selected,
+  updated,
+  onSelect,
+  onPrevious,
+  onNext,
+}: FileRailProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerClosing, setDrawerClosing] = useState(false);
   const [query, setQuery] = useState("");
@@ -98,42 +107,44 @@ export function FileRail({ files, selected, updated, onSelect, onPrevious, onNex
 
   return (
     <>
-      <nav className="file-rail" aria-label="変更ファイル">
-        {groups.map((group) => {
-          const path = folderParts(group.folder);
-          return (
-            <section className="folder-group" aria-label={`${group.folder} フォルダ`} key={group.folder}>
-              <div className="folder-group-heading" title={group.folder}>
-                <Icon name="folder" size={13} />
-                <span className="folder-path">
-                  {path.parents ? <span>{path.parents}/</span> : null}
-                  <strong>{path.current}</strong>
-                </span>
-                <small>{group.files.length}</small>
-              </div>
-              <div className="folder-files">
-                {group.files.map(({ file, index }) => (
-                  <button
-                    aria-current={index === selected ? "true" : undefined}
-                    className={`file-pill ${index === selected ? "is-selected" : ""}`}
-                    key={`${file.name}-${index}`}
-                    onClick={() => onSelect(index)}
-                    ref={index === selected ? selectedPill : undefined}
-                    title={file.name}
-                    type="button"
-                  >
-                    <span className={`change-dot change-${file.type}`} />
-                    <span className="file-pill-name">{file.name.split("/").at(-1)}</span>
-                    <span className="file-pill-count">
-                      {index + 1}/{files.length}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          );
-        })}
-      </nav>
+      {railVisible ? (
+        <nav className="file-rail" aria-label="変更ファイル">
+          {groups.map((group) => {
+            const path = folderParts(group.folder);
+            return (
+              <section className="folder-group" aria-label={`${group.folder} フォルダ`} key={group.folder}>
+                <div className="folder-group-heading" title={group.folder}>
+                  <Icon name="folder" size={13} />
+                  <span className="folder-path">
+                    {path.parents ? <span>{path.parents}/</span> : null}
+                    <strong>{path.current}</strong>
+                  </span>
+                  <small>{group.files.length}</small>
+                </div>
+                <div className="folder-files">
+                  {group.files.map(({ file, index }) => (
+                    <button
+                      aria-current={index === selected ? "true" : undefined}
+                      className={`file-pill ${index === selected ? "is-selected" : ""}`}
+                      key={`${file.name}-${index}`}
+                      onClick={() => onSelect(index)}
+                      ref={index === selected ? selectedPill : undefined}
+                      title={file.name}
+                      type="button"
+                    >
+                      <span className={`change-dot change-${file.type}`} />
+                      <span className="file-pill-name">{file.name.split("/").at(-1)}</span>
+                      <span className="file-pill-count">
+                        {index + 1}/{files.length}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </nav>
+      ) : null}
 
       <footer className="review-dock">
         <button type="button" onClick={onPrevious} aria-label="前のファイル">

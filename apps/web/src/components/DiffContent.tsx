@@ -1,9 +1,8 @@
 import type { FileDiffMetadata } from "@pierre/diffs";
-import { FileDiff } from "@pierre/diffs/react";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { DiffResponse } from "../types";
+import { DiffPanel } from "./DiffPanel";
 import { FileRail } from "./FileRail";
-import { Icon } from "./Icon";
 
 type DiffContentProps = {
   activeRepoId: string;
@@ -16,16 +15,13 @@ type DiffContentProps = {
   onNext: () => void;
 };
 
+type ViewMode = "single" | "all";
+
 const LINE_WRAP_KEY = "pocket-diff:line-wrap";
+const VIEW_MODE_KEY = "pocket-diff:view-mode";
 
-const IMAGE_EXTENSIONS = new Set(["avif", "bmp", "gif", "ico", "jpeg", "jpg", "png", "svg", "webp"]);
-
-function patchBlockAt(patch: string, index: number) {
-  return patch.split(/(?=^diff --git )/m).filter((block) => block.startsWith("diff --git "))[index] || "";
-}
-
-function isImageFile(name: string) {
-  return IMAGE_EXTENSIONS.has(name.split(".").at(-1)?.toLowerCase() || "");
+function patchBlocks(patch: string) {
+  return patch.split(/(?=^diff --git )/m).filter((block) => block.startsWith("diff --git "));
 }
 
 export function DiffContent({
@@ -39,11 +35,12 @@ export function DiffContent({
   onNext,
 }: DiffContentProps) {
   const [wrapLines, setWrapLines] = useState(() => window.localStorage.getItem(LINE_WRAP_KEY) !== "scroll");
-  const patchBlock = patchBlockAt(data.patch, selected);
-  const isBinary = /^Binary files .+ differ$|^GIT binary patch$/m.test(patchBlock);
-  const isImage = isImageFile(current.name);
-  const isRename = current.type === "rename-pure" || current.type === "rename-changed";
-  const showsTextDiff = !isImage && !isBinary && current.type !== "rename-pure" && current.hunks.length > 0;
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    window.localStorage.getItem(VIEW_MODE_KEY) === "all" ? "all" : "single",
+  );
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const blocks = useMemo(() => patchBlocks(data.patch), [data.patch]);
   const updated = data.generatedAt
     ? new Intl.DateTimeFormat("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(
         new Date(data.generatedAt),
@@ -57,6 +54,29 @@ export function DiffContent({
       return nextValue;
     });
   };
+
+  const changeViewMode = (nextMode: ViewMode) => {
+    setViewMode(nextMode);
+    window.localStorage.setItem(VIEW_MODE_KEY, nextMode);
+    if (nextMode === "all") {
+      window.requestAnimationFrame(() =>
+        document.getElementById(`diff-file-${selected}`)?.scrollIntoView({ block: "start" }),
+      );
+    }
+  };
+
+  const selectAndScroll = (index: number) => {
+    onSelect(index);
+    if (viewMode === "all") {
+      window.requestAnimationFrame(() =>
+        document.getElementById(`diff-file-${index}`)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      );
+    }
+  };
+
+  const previous = () =>
+    viewMode === "all" ? selectAndScroll((selected - 1 + files.length) % files.length) : onPrevious();
+  const next = () => (viewMode === "all" ? selectAndScroll((selected + 1) % files.length) : onNext());
 
   return (
     <>
@@ -78,165 +98,134 @@ export function DiffContent({
         </div>
       </section>
 
+      <div className="view-mode-bar">
+        <span>表示</span>
+        <div className="view-mode-toggle" role="group" aria-label="差分の表示方法">
+          <button
+            aria-pressed={viewMode === "single"}
+            className={viewMode === "single" ? "is-active" : ""}
+            onClick={() => changeViewMode("single")}
+            type="button"
+          >
+            1件
+          </button>
+          <button
+            aria-pressed={viewMode === "all"}
+            className={viewMode === "all" ? "is-active" : ""}
+            onClick={() => changeViewMode("all")}
+            type="button"
+          >
+            すべて
+          </button>
+        </div>
+      </div>
+
       <FileRail
         files={files}
+        railVisible={viewMode === "single"}
         selected={selected}
         updated={updated}
-        onSelect={onSelect}
-        onPrevious={onPrevious}
-        onNext={onNext}
+        onSelect={selectAndScroll}
+        onPrevious={previous}
+        onNext={next}
       />
 
-      <main className="diff-stage">
-        <div className="file-heading">
-          <div className="file-icon">
-            <Icon name="file" size={17} />
-          </div>
-          <div>
-            <p>{current.name.split("/").slice(0, -1).join("/") || "root"}</p>
-            <h2>{current.name.split("/").at(-1)}</h2>
-          </div>
-          <div className="file-heading-actions">
-            <span className="change-label">{current.type}</span>
-            {showsTextDiff ? (
-              <button
-                aria-label={wrapLines ? "コードの折り返しを無効にする" : "コードの折り返しを有効にする"}
-                aria-pressed={wrapLines}
-                className="wrap-toggle"
-                onClick={toggleLineWrap}
-                title={wrapLines ? "折返し中。押すと横スクロール表示" : "横スクロール中。押すと折返し表示"}
-                type="button"
-              >
-                <Icon name="wrap" size={16} />
-              </button>
-            ) : null}
-          </div>
-        </div>
-        {isRename ? <RenameNotice currentName={current.name} previousName={current.prevName} /> : null}
-        {isImage ? (
-          <ImagePreview
-            key={`${current.name}-${data.revision}`}
+      {viewMode === "all" ? (
+        <AllDiffs
+          activeRepoId={activeRepoId}
+          blocks={blocks}
+          data={data}
+          files={files}
+          selected={selected}
+          selectedRef={selectedRef}
+          wrapLines={wrapLines}
+          onActive={onSelect}
+          onToggleLineWrap={toggleLineWrap}
+        />
+      ) : (
+        <main className="single-diff">
+          <DiffPanel
             activeRepoId={activeRepoId}
-            currentName={current.name}
-            previousName={current.prevName}
+            file={current}
+            index={selected}
+            isCurrent
+            patchBlock={blocks[selected] || ""}
             revision={data.revision}
-            type={current.type}
+            total={files.length}
+            virtualized={false}
+            wrapLines={wrapLines}
+            onToggleLineWrap={toggleLineWrap}
           />
-        ) : isBinary ? (
-          <BinaryNotice />
-        ) : current.type === "rename-pure" ? null : current.hunks.length === 0 ? (
-          <EmptyFileNotice />
-        ) : (
-          <div className="diff-frame" key={`${current.name}-${data.revision}-${wrapLines ? "wrap" : "scroll"}`}>
-            <FileDiff
-              fileDiff={current}
-              disableWorkerPool
-              options={{
-                diffStyle: "unified",
-                overflow: wrapLines ? "wrap" : "scroll",
-                diffIndicators: "bars",
-                lineDiffType: "word",
-                hunkSeparators: "line-info-basic",
-                disableFileHeader: true,
-                stickyHeader: false,
-                theme: "pierre-light",
-                themeType: "light",
-              }}
-            />
-          </div>
-        )}
-      </main>
+        </main>
+      )}
     </>
   );
 }
 
-function RenameNotice({ currentName, previousName }: { currentName: string; previousName?: string }) {
-  return (
-    <div className="rename-notice" role="status">
-      <div className="special-view-icon rename-view-icon">
-        <Icon name="rename" size={20} />
-      </div>
-      <div className="rename-copy">
-        <strong>ファイル名を変更しました</strong>
-        <div className="rename-paths">
-          <code>{previousName || "以前のファイル"}</code>
-          <Icon name="chevron" size={14} />
-          <code>{currentName}</code>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function BinaryNotice() {
-  return (
-    <div className="special-file-view" role="status">
-      <div className="special-view-icon">
-        <Icon name="binary" size={22} />
-      </div>
-      <strong>バイナリファイルです</strong>
-      <p>内容の差分はテキストとして表示できません。</p>
-    </div>
-  );
-}
-
-function EmptyFileNotice() {
-  return (
-    <div className="special-file-view" role="status">
-      <div className="special-view-icon">
-        <Icon name="file" size={22} />
-      </div>
-      <strong>内容が空のファイルです</strong>
-      <p>表示できる行の変更はありません。</p>
-    </div>
-  );
-}
-
-function ImagePreview({
+function AllDiffs({
   activeRepoId,
-  currentName,
-  previousName,
-  revision,
-  type,
+  blocks,
+  data,
+  files,
+  selected,
+  selectedRef,
+  wrapLines,
+  onActive,
+  onToggleLineWrap,
 }: {
   activeRepoId: string;
-  currentName: string;
-  previousName?: string;
-  revision: string;
-  type: FileDiffMetadata["type"];
+  blocks: string[];
+  data: DiffResponse;
+  files: FileDiffMetadata[];
+  selected: number;
+  selectedRef: { current: number };
+  wrapLines: boolean;
+  onActive: (index: number) => void;
+  onToggleLineWrap: () => void;
 }) {
-  const [failed, setFailed] = useState(false);
-  const [dimensions, setDimensions] = useState("");
-  const deleted = type === "deleted";
-  const source = deleted ? "head" : "working";
-  const name = deleted ? previousName || currentName : currentName;
-  const params = new URLSearchParams({ repo: activeRepoId, path: name, source, revision });
-  const imageURL = `${import.meta.env.BASE_URL}api/image?${params}`;
+  const container = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!container.current || typeof IntersectionObserver === "undefined") return undefined;
+    const visible = new Set<Element>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) visible.add(entry.target);
+          else visible.delete(entry.target);
+        });
+        const nearest = [...visible]
+          .map((element) => [element, element.getBoundingClientRect().top] as const)
+          .toSorted((left, right) => Math.abs(left[1] - 82) - Math.abs(right[1] - 82))[0];
+        if (!nearest) return;
+        const index = Number((nearest[0] as HTMLElement).dataset.diffIndex);
+        if (Number.isInteger(index) && index !== selectedRef.current) onActive(index);
+      },
+      { rootMargin: "-72px 0px -62% 0px", threshold: 0 },
+    );
+    container.current
+      .querySelectorAll<HTMLElement>("[data-diff-index]")
+      .forEach((element) => observer.observe(element));
+    return () => observer.disconnect();
+  }, [files.length, onActive, selectedRef]);
 
   return (
-    <div className="image-preview">
-      <div className="image-preview-meta">
-        <span>{deleted ? "変更前の画像" : "変更後の画像"}</span>
-        {dimensions ? <code>{dimensions}</code> : null}
-      </div>
-      <div className="image-canvas">
-        {failed ? (
-          <div className="image-error" role="status">
-            <Icon name="image" size={24} />
-            <strong>画像を読み込めませんでした</strong>
-            <p>ファイル形式またはサイズを確認してください。</p>
-          </div>
-        ) : (
-          <img
-            alt={`${name} のプレビュー`}
-            src={imageURL}
-            onError={() => setFailed(true)}
-            onLoad={(event) =>
-              setDimensions(`${event.currentTarget.naturalWidth} × ${event.currentTarget.naturalHeight}`)
-            }
-          />
-        )}
-      </div>
-    </div>
+    <main className="all-diffs" ref={container}>
+      {files.map((file, index) => (
+        <DiffPanel
+          activeRepoId={activeRepoId}
+          file={file}
+          index={index}
+          isCurrent={index === selected}
+          key={`${file.name}-${index}`}
+          patchBlock={blocks[index] || ""}
+          revision={data.revision}
+          total={files.length}
+          virtualized
+          wrapLines={wrapLines}
+          onToggleLineWrap={onToggleLineWrap}
+        />
+      ))}
+    </main>
   );
 }

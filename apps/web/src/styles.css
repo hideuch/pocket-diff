@@ -225,6 +225,46 @@ button:focus-visible {
   background: var(--delete);
 }
 
+.view-mode-bar {
+  height: 38px;
+  margin: -4px 12px 12px;
+  padding: 4px 5px 4px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #d8e0ea;
+  border-radius: 12px;
+  color: #748095;
+  background: rgba(255, 255, 255, 0.66);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.view-mode-toggle {
+  height: 28px;
+  padding: 2px;
+  display: grid;
+  grid-template-columns: 52px 58px;
+  border-radius: 9px;
+  background: #e9edf3;
+}
+
+.view-mode-toggle button {
+  border: 0;
+  border-radius: 7px;
+  color: #728095;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.view-mode-toggle button.is-active {
+  color: #2f426f;
+  background: white;
+  box-shadow: 0 1px 4px rgba(28, 42, 64, 0.13);
+}
+
 .file-rail {
   display: flex;
   align-items: stretch;
@@ -684,6 +724,58 @@ button:focus-visible {
   border-radius: 16px;
   background: var(--paper);
   box-shadow: 0 13px 35px rgba(28, 46, 74, 0.07);
+}
+
+.single-diff {
+  display: contents;
+}
+
+.all-diffs {
+  margin: 0 6px;
+  display: grid;
+  gap: 12px;
+}
+
+.all-diffs .diff-stage {
+  margin: 0;
+}
+
+.diff-file-panel {
+  scroll-margin-top: calc(68px + env(safe-area-inset-top));
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.all-diffs .diff-file-panel.is-current {
+  border-color: #aebbf1;
+  box-shadow:
+    0 0 0 2px rgba(69, 91, 184, 0.08),
+    0 13px 35px rgba(28, 46, 74, 0.08);
+}
+
+.all-diff-position {
+  color: #7b8798;
+  font:
+    700 8px/1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+.virtual-diff-body {
+  min-height: 1px;
+  overflow: hidden;
+  contain: layout paint;
+}
+
+.virtual-diff-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 120px;
+  background:
+    linear-gradient(90deg, transparent 48px, rgba(220, 227, 236, 0.65) 48px 49px, transparent 49px),
+    repeating-linear-gradient(180deg, #fbfcfd 0 19px, #f1f4f7 19px 20px);
 }
 .file-heading {
   min-height: 62px;
