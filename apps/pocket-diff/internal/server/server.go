@@ -2,11 +2,13 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"log"
 	"mime"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/hideuch/pocket-diff/apps/pocket-diff/internal/catalog"
@@ -74,9 +76,57 @@ func (s *Server) ServeHTTP(response http.ResponseWriter, request *http.Request) 
 		}
 		writeJSON(response, http.StatusOK, result)
 		return
+	case "/api/image":
+		s.serveImage(response, request)
+		return
 	}
 
 	s.serveAsset(response, request, localPath)
+}
+
+var imageMediaTypes = map[string]string{
+	".avif": "image/avif",
+	".bmp":  "image/bmp",
+	".gif":  "image/gif",
+	".ico":  "image/x-icon",
+	".jpeg": "image/jpeg",
+	".jpg":  "image/jpeg",
+	".png":  "image/png",
+	".svg":  "image/svg+xml",
+	".webp": "image/webp",
+}
+
+func (s *Server) serveImage(response http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet && request.Method != http.MethodHead {
+		response.Header().Set("Allow", "GET, HEAD")
+		writeJSON(response, http.StatusMethodNotAllowed, map[string]string{"error": "対応していないリクエストです"})
+		return
+	}
+	name := request.URL.Query().Get("path")
+	mediaType, ok := imageMediaTypes[strings.ToLower(filepath.Ext(name))]
+	if !ok {
+		writeJSON(response, http.StatusUnsupportedMediaType, map[string]string{"error": "プレビューできない画像形式です"})
+		return
+	}
+	repositoryPath, ok := s.catalog.Resolve(request.URL.Query().Get("repo"))
+	if !ok {
+		writeJSON(response, http.StatusNotFound, map[string]string{"error": "リポジトリが見つかりません"})
+		return
+	}
+	content, err := gitdiff.ReadFileVersion(repositoryPath, name, request.URL.Query().Get("source"))
+	if err != nil {
+		writeJSON(response, http.StatusNotFound, map[string]string{"error": "画像を読み込めませんでした"})
+		return
+	}
+	response.Header().Set("Cache-Control", "private, no-cache")
+	response.Header().Set("Content-Type", mediaType)
+	response.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	response.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
+	if request.Method == http.MethodHead {
+		response.WriteHeader(http.StatusOK)
+		return
+	}
+	_, _ = response.Write(content)
 }
 
 func (s *Server) serveAsset(response http.ResponseWriter, request *http.Request, localPath string) {

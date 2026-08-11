@@ -34,6 +34,7 @@ export function App() {
 
       {pocketDiff.files.length > 0 && pocketDiff.data && pocketDiff.current ? (
         <DiffContent
+          activeRepoId={pocketDiff.activeRepoId}
           data={pocketDiff.data}
           files={pocketDiff.files}
           current={pocketDiff.current}

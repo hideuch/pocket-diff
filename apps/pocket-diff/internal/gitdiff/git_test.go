@@ -44,6 +44,43 @@ func TestCollectIncludesTrackedAndUntrackedChanges(t *testing.T) {
 	}
 }
 
+func TestReadFileVersionReadsWorkingTreeAndHead(t *testing.T) {
+	repository := t.TempDir()
+	gitTest(t, repository, "init", "-q")
+	gitTest(t, repository, "config", "user.name", "Pocket Diff Test")
+	gitTest(t, repository, "config", "user.email", "test@example.invalid")
+	writeTestFile(t, filepath.Join(repository, "preview.png"), "head-image")
+	gitTest(t, repository, "add", "preview.png")
+	gitTest(t, repository, "commit", "-qm", "initial")
+	writeTestFile(t, filepath.Join(repository, "preview.png"), "working-image")
+
+	working, err := ReadFileVersion(repository, "preview.png", "working")
+	if err != nil || string(working) != "working-image" {
+		t.Fatalf("unexpected working file: %q, %v", working, err)
+	}
+	head, err := ReadFileVersion(repository, "preview.png", "head")
+	if err != nil || string(head) != "head-image" {
+		t.Fatalf("unexpected HEAD file: %q, %v", head, err)
+	}
+}
+
+func TestReadFileVersionRejectsPathsOutsideRepository(t *testing.T) {
+	repository := t.TempDir()
+	gitTest(t, repository, "init", "-q")
+	outside := filepath.Join(t.TempDir(), "outside.png")
+	writeTestFile(t, outside, "private")
+
+	if _, err := ReadFileVersion(repository, "../outside.png", "working"); err == nil {
+		t.Fatal("parent traversal was accepted")
+	}
+	if err := os.Symlink(outside, filepath.Join(repository, "linked.png")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadFileVersion(repository, "linked.png", "working"); err == nil {
+		t.Fatal("symlink outside repository was accepted")
+	}
+}
+
 func gitTest(t *testing.T, directory string, arguments ...string) {
 	t.Helper()
 	command := exec.Command("git", arguments...)

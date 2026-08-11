@@ -14,6 +14,7 @@ import (
 )
 
 const maxUntrackedBytes = 1024 * 1024
+const maxPreviewBytes = 25 * 1024 * 1024
 
 type Summary struct {
 	Additions int `json:"additions"`
@@ -61,6 +62,62 @@ func runGit(directory string, allowDifference bool, args ...string) (string, err
 		return stdout.String(), nil
 	}
 	return "", &CommandError{Command: "git " + strings.Join(args, " "), Stderr: stderr.String(), Err: err}
+}
+
+// ReadFileVersion returns a repository file for the image preview endpoint.
+// source must be either "working" or "head". Working-tree symlinks are
+// resolved and rejected when they point outside of the repository.
+func ReadFileVersion(repositoryPath, name, source string) ([]byte, error) {
+	cleanName := filepath.ToSlash(filepath.Clean(filepath.FromSlash(name)))
+	if name == "" || cleanName == "." || cleanName == ".." || strings.HasPrefix(cleanName, "../") || filepath.IsAbs(name) {
+		return nil, fmt.Errorf("invalid repository path")
+	}
+
+	rootOutput, err := runGit(repositoryPath, false, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return nil, err
+	}
+	root, err := filepath.EvalSymlinks(strings.TrimSpace(rootOutput))
+	if err != nil {
+		return nil, err
+	}
+
+	switch source {
+	case "working":
+		candidate, err := filepath.EvalSymlinks(filepath.Join(root, filepath.FromSlash(cleanName)))
+		if err != nil {
+			return nil, err
+		}
+		relative, err := filepath.Rel(root, candidate)
+		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+			return nil, fmt.Errorf("file is outside the repository")
+		}
+		info, err := os.Stat(candidate)
+		if err != nil {
+			return nil, err
+		}
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("not a regular file")
+		}
+		if info.Size() > maxPreviewBytes {
+			return nil, fmt.Errorf("file exceeds the preview limit")
+		}
+		return os.ReadFile(candidate)
+	case "head":
+		spec := "HEAD:" + cleanName
+		sizeOutput, err := runGit(root, false, "cat-file", "-s", spec)
+		if err != nil {
+			return nil, err
+		}
+		var size int64
+		if _, err := fmt.Sscan(strings.TrimSpace(sizeOutput), &size); err != nil || size > maxPreviewBytes {
+			return nil, fmt.Errorf("file exceeds the preview limit")
+		}
+		content, err := runGit(root, false, "show", spec)
+		return []byte(content), err
+	default:
+		return nil, fmt.Errorf("invalid file source")
+	}
 }
 
 func CountPatch(patch string) Summary {
