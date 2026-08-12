@@ -397,7 +397,6 @@ function AllDiffs({
             patchBlock={blocks[index] || ""}
             revision={data.revision}
             reviewActive={reviewFileKey === fileKey}
-            total={files.length}
             codeTheme={theme.codeTheme}
             codeThemeType={theme.themeType}
             wrapLines={!noWrapFiles.has(fileKey)}

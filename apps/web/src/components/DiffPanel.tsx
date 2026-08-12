@@ -25,7 +25,6 @@ type DiffPanelProps = {
   patchBlock: string;
   revision: string;
   reviewActive: boolean;
-  total: number;
   wrapLines: boolean;
   onToggleExpanded: () => void;
   onToggleLineWrap: () => void;
@@ -102,7 +101,6 @@ export function DiffPanel({
   patchBlock,
   revision,
   reviewActive,
-  total,
   wrapLines,
   onToggleExpanded,
   onToggleLineWrap,
@@ -118,6 +116,8 @@ export function DiffPanel({
   const copyTimer = useRef<number | undefined>(undefined);
   const isBinary = /^Binary files .+ differ$|^GIT binary patch$/m.test(patchBlock);
   const isImage = isImageFile(file.name);
+  const additions = file.hunks.reduce((total, hunk) => total + hunk.additionLines, 0);
+  const deletions = file.hunks.reduce((total, hunk) => total + hunk.deletionLines, 0);
   const isRename = file.type === "rename-pure" || file.type === "rename-changed";
   const canShowFullFile = !isImage && !isBinary;
   const showsTextDiff = !isImage && !isBinary && file.type !== "rename-pure" && file.hunks.length > 0;
@@ -285,8 +285,9 @@ export function DiffPanel({
           <h2>{file.name.split("/").at(-1)}</h2>
         </div>
         <div className="file-heading-actions">
-          <span className="all-diff-position">
-            {index + 1}/{total}
+          <span aria-label={`追加 ${additions} 行、削除 ${deletions} 行`} className="file-diff-counts">
+            <span className="additions">+{additions}</span>
+            <span className="deletions">−{deletions}</span>
           </span>
           <span className="visually-hidden">変更種別: {getChangeTypeLabel(file.type)}</span>
           {canShowFullFile ? (

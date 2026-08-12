@@ -953,10 +953,12 @@ button:focus-visible {
     0 13px 35px rgba(28, 46, 74, 0.08);
 }
 
-.all-diff-position {
-  color: #7b8798;
+.file-diff-counts {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font:
-    700 8px/1 ui-monospace,
+    700 9px/1 ui-monospace,
     SFMono-Regular,
     Menlo,
     monospace;
