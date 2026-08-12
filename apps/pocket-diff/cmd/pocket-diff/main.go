@@ -26,6 +26,8 @@ import (
 
 var version = "dev"
 
+const skipServiceSyncEnvironment = "POCKET_DIFF_SKIP_SERVICE_SYNC"
+
 type rootsFlag []string
 
 func (values *rootsFlag) String() string { return strings.Join(*values, string(os.PathListSeparator)) }
@@ -162,10 +164,23 @@ func update(arguments []string) error {
 	if err != nil {
 		return err
 	}
+	serviceResult := serviceUpdateResult{}
+	if os.Getenv(skipServiceSyncEnvironment) != "1" {
+		serviceResult, err = updateInstalledService(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	if result.Updated {
 		fmt.Printf("Updated Pocket Diff: %s -> %s (Sigstore verified)\n", result.Current, result.Latest)
 	} else {
 		fmt.Printf("Pocket Diff is current: %s\n", result.Current)
+	}
+	if serviceResult.synchronized {
+		fmt.Printf("Synchronized background service: %s\n", serviceResult.path)
+	}
+	if serviceResult.restarted {
+		fmt.Println("Restarted Pocket Diff background service")
 	}
 	return nil
 }

@@ -82,6 +82,8 @@ pcdiff update --check
 pcdiff update
 ```
 
+`pcdiff update`は、セットアップ済みの常駐サービス用バイナリも更新し、更新後にLaunchAgent、systemd user service、またはWindowsタスクを再起動します。
+
 自動更新を無効化する場合はセットアップ時に`--no-auto-update`を指定するか、サービスの環境変数へ`POCKET_DIFF_AUTO_UPDATE=0`を設定します。
 
 ## アンインストール
