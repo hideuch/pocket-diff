@@ -21,6 +21,7 @@ export function FileRail({ files, selected, updated, onSelect, onPrevious, onNex
   const selectedRow = useRef<HTMLButtonElement>(null);
   const drawer = useRef<HTMLElement>(null);
   const closeTimer = useRef<number | undefined>(undefined);
+  const selectTimer = useRef<number | undefined>(undefined);
   const filteredTree = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     const visibleFiles = normalizedQuery
@@ -74,11 +75,18 @@ export function FileRail({ files, selected, updated, onSelect, onPrevious, onNex
     };
   }, [closeDrawer, drawerOpen]);
 
-  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+  useEffect(
+    () => () => {
+      window.clearTimeout(closeTimer.current);
+      window.clearTimeout(selectTimer.current);
+    },
+    [],
+  );
 
   const selectFile = (index: number) => {
-    onSelect(index);
     closeDrawer();
+    window.clearTimeout(selectTimer.current);
+    selectTimer.current = window.setTimeout(() => onSelect(index), BOTTOM_SHEET_CLOSE_MS);
   };
 
   const toggleFolder = (path: string) => {

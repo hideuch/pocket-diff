@@ -43,12 +43,44 @@ const LINE_NUMBER_INTERACTION_CSS = `
   cursor: pointer;
 }`;
 const visibilityCallbacks = new WeakMap<Element, (visible: boolean) => void>();
+const visibilityStates = new Map<Element, boolean>();
 let visibilityObserver: IntersectionObserver | undefined;
+let virtualizationPaused = false;
+
+export function setDiffVirtualizationPaused(paused: boolean, visiblePanels: HTMLElement[] = []) {
+  virtualizationPaused = paused;
+  if (paused) return;
+  visibilityStates.forEach((_, element) => visibilityStates.set(element, false));
+  visiblePanels.forEach((panel) => {
+    const visibleBody = panel.querySelector<HTMLElement>(".virtual-diff-body");
+    if (visibleBody) visibilityStates.set(visibleBody, true);
+  });
+  visibilityStates.forEach((visible, element) => visibilityCallbacks.get(element)?.(visible));
+}
+
+export function renderDiffBodiesForScroll(panel: HTMLElement) {
+  const panels = [panel];
+  let previous = panel.previousElementSibling as HTMLElement | null;
+  const targetTop = panel.getBoundingClientRect().top;
+  while (previous && targetTop - previous.getBoundingClientRect().bottom <= 1200) {
+    panels.push(previous);
+    previous = previous.previousElementSibling as HTMLElement | null;
+  }
+  panels.forEach((candidate) => {
+    const body = candidate.querySelector<HTMLElement>(".virtual-diff-body");
+    if (body) visibilityCallbacks.get(body)?.(true);
+  });
+  return panels;
+}
 
 function getVisibilityObserver() {
   if (visibilityObserver || typeof IntersectionObserver === "undefined") return visibilityObserver;
   visibilityObserver = new IntersectionObserver(
-    (entries) => entries.forEach((entry) => visibilityCallbacks.get(entry.target)?.(entry.isIntersecting)),
+    (entries) =>
+      entries.forEach((entry) => {
+        visibilityStates.set(entry.target, entry.isIntersecting);
+        if (!virtualizationPaused) visibilityCallbacks.get(entry.target)?.(entry.isIntersecting);
+      }),
     { rootMargin: "1000px 0px", threshold: 0 },
   );
   return visibilityObserver;
@@ -510,6 +542,7 @@ function VirtualizedDiffBody({ children, estimatedHeight }: { children: ReactNod
     return () => {
       observer.unobserve(element);
       visibilityCallbacks.delete(element);
+      visibilityStates.delete(element);
     };
   }, []);
 

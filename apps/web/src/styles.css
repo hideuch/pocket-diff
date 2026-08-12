@@ -208,6 +208,7 @@ button:focus-visible {
 
 .topbar {
   position: sticky;
+  view-transition-name: pocket-diff-header;
   top: 0;
   z-index: 20;
   height: calc(64px + env(safe-area-inset-top));
@@ -889,6 +890,31 @@ button:focus-visible {
   margin: 0 6px;
   display: grid;
   gap: 12px;
+  overflow-anchor: none;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+  animation-timing-function: ease-out;
+}
+
+::view-transition-old(root) {
+  animation-name: diff-view-fade-out;
+}
+
+::view-transition-new(root) {
+  animation-name: diff-view-fade-in;
+}
+
+::view-transition-old(pocket-diff-header),
+::view-transition-new(pocket-diff-header) {
+  animation: none;
+}
+
+::view-transition-group(pocket-diff-dock) {
+  animation-duration: 180ms;
+  animation-timing-function: ease-out;
 }
 
 .all-diffs .diff-stage {
@@ -898,7 +924,7 @@ button:focus-visible {
 .diff-file-panel {
   --file-accent: #4f6fd0;
   --file-accent-soft: #eef2ff;
-  scroll-margin-top: calc(68px + env(safe-area-inset-top));
+  scroll-margin-top: calc(62px + env(safe-area-inset-top));
   transition:
     border-color 180ms ease,
     box-shadow 180ms ease;
@@ -940,6 +966,7 @@ button:focus-visible {
   min-height: 1px;
   overflow: hidden;
   contain: layout paint;
+  background: var(--paper);
 }
 
 .virtual-diff-placeholder {
@@ -947,8 +974,17 @@ button:focus-visible {
   height: 100%;
   min-height: 120px;
   background:
-    linear-gradient(90deg, transparent 48px, rgba(220, 227, 236, 0.65) 48px 49px, transparent 49px),
-    repeating-linear-gradient(180deg, #fbfcfd 0 19px, #f1f4f7 19px 20px);
+    linear-gradient(
+      90deg,
+      transparent 48px,
+      color-mix(in srgb, var(--line) 65%, transparent) 48px 49px,
+      transparent 49px
+    ),
+    repeating-linear-gradient(
+      180deg,
+      var(--paper) 0 19px,
+      color-mix(in srgb, var(--surface-soft) 72%, var(--paper)) 19px 20px
+    );
 }
 
 .diff-panel-collapse {
@@ -1516,6 +1552,7 @@ button:focus-visible {
 }
 
 .review-dock {
+  view-transition-name: pocket-diff-dock;
   position: fixed;
   z-index: 25;
   left: 50%;
@@ -2005,6 +2042,18 @@ button:focus-visible {
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes diff-view-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes diff-view-fade-in {
+  from {
+    opacity: 0;
   }
 }
 
