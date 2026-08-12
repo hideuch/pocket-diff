@@ -13,7 +13,10 @@ type DiffContentProps = {
   data: DiffResponse;
   files: FileDiffMetadata[];
   selected: number;
+  stagedFiles: number;
+  changedFiles: number;
   theme: AppThemeDefinition;
+  onOpenGitActions: () => void;
   onSelect: (index: number) => void;
 };
 
@@ -41,7 +44,17 @@ function storedFileSet(key: string) {
   }
 }
 
-function DiffContentView({ activeRepoId, data, files, selected, theme, onSelect }: DiffContentProps) {
+function DiffContentView({
+  activeRepoId,
+  data,
+  files,
+  selected,
+  stagedFiles,
+  changedFiles,
+  theme,
+  onOpenGitActions,
+  onSelect,
+}: DiffContentProps) {
   const [noWrapFiles, setNoWrapFiles] = useState<Set<string>>(() => storedFileSet(NO_WRAP_FILES_KEY));
   const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(() => new Set());
   const [reviewFileKey, setReviewFileKey] = useState<string | null>(null);
@@ -58,12 +71,6 @@ function DiffContentView({ activeRepoId, data, files, selected, theme, onSelect 
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
   const blocks = useMemo(() => patchBlocks(data.patch), [data.patch]);
-  const updated = data.generatedAt
-    ? new Intl.DateTimeFormat("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(
-        new Date(data.generatedAt),
-      )
-    : "—";
-
   useEffect(
     () => () => {
       window.clearTimeout(commentsCopyTimer.current);
@@ -209,14 +216,6 @@ function DiffContentView({ activeRepoId, data, files, selected, theme, onSelect 
     });
   };
 
-  const previous = () => {
-    const current = scrollTarget.current ?? selected;
-    selectAndScroll((current - 1 + files.length) % files.length);
-  };
-  const next = () => {
-    const current = scrollTarget.current ?? selected;
-    selectAndScroll((current + 1) % files.length);
-  };
   const toggleFile = (fileKey: string) => {
     setCollapsedFiles((currentFiles) => {
       const nextFiles = new Set(currentFiles);
@@ -247,12 +246,12 @@ function DiffContentView({ activeRepoId, data, files, selected, theme, onSelect 
       </section>
 
       <FileRail
+        changedFiles={changedFiles}
         files={files}
         selected={selected}
-        updated={updated}
+        stagedFiles={stagedFiles}
+        onOpenGitActions={onOpenGitActions}
         onSelect={selectAndScroll}
-        onPrevious={previous}
-        onNext={next}
       />
 
       <AllDiffs

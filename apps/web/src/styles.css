@@ -1556,7 +1556,7 @@ button:focus-visible {
   height: 62px;
   padding: 7px;
   display: grid;
-  grid-template-columns: 48px 1fr 48px;
+  grid-template-columns: minmax(0, 1fr) 48px;
   align-items: center;
   border: 1px solid rgba(204, 213, 226, 0.95);
   border-radius: 19px;
@@ -1571,25 +1571,13 @@ button:focus-visible {
   border-radius: 13px;
   background: #eef2f7;
 }
-.review-dock .next-button {
+.review-dock .dock-git-actions-button {
   color: white;
   background: var(--blue);
 }
-.review-status {
-  display: grid;
-  place-items: center;
-  gap: 3px;
-}
-.review-status span {
-  font:
-    750 13px/1 ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
-}
-.review-status small {
-  color: var(--muted);
-  font-size: 9px;
+
+.review-dock .dock-git-actions-button > span {
+  border-color: var(--paper);
 }
 .review-dock .mobile-file-switcher {
   display: none;
@@ -2229,7 +2217,7 @@ button:focus-visible {
   width: min(calc(100% - 16px), 430px);
   height: 58px;
   padding: 6px;
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 1fr) 44px;
   gap: 6px;
   border-radius: 17px;
 }
@@ -2238,10 +2226,6 @@ button:focus-visible {
   width: 44px;
   height: 44px;
   border-radius: 12px;
-}
-
-.review-dock .review-status {
-  display: none;
 }
 
 /* Theme-aware surfaces are grouped here so the mobile-first overrides above cannot leave light controls behind. */
@@ -2353,7 +2337,7 @@ button:focus-visible {
   background: var(--control-soft);
 }
 
-.review-dock .next-button {
+.review-dock .dock-git-actions-button {
   color: white;
   background: var(--blue);
 }

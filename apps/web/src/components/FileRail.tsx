@@ -5,15 +5,15 @@ import { BOTTOM_SHEET_CLOSE_MS, useBottomSheetDrag } from "../hooks/useBottomShe
 import { Icon } from "./Icon";
 
 type FileRailProps = {
+  changedFiles: number;
   files: FileDiffMetadata[];
   selected: number;
-  updated: string;
+  stagedFiles: number;
+  onOpenGitActions: () => void;
   onSelect: (index: number) => void;
-  onPrevious: () => void;
-  onNext: () => void;
 };
 
-export function FileRail({ files, selected, updated, onSelect, onPrevious, onNext }: FileRailProps) {
+export function FileRail({ changedFiles, files, selected, stagedFiles, onOpenGitActions, onSelect }: FileRailProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerClosing, setDrawerClosing] = useState(false);
   const [query, setQuery] = useState("");
@@ -101,9 +101,6 @@ export function FileRail({ files, selected, updated, onSelect, onPrevious, onNex
   return (
     <>
       <footer className="review-dock">
-        <button type="button" onClick={onPrevious} aria-label="前のファイル">
-          <Icon name="arrow" />
-        </button>
         <button className="mobile-file-switcher" type="button" onClick={openDrawer}>
           <span className="mobile-file-icon">
             <Icon name="folder" size={15} />
@@ -119,14 +116,15 @@ export function FileRail({ files, selected, updated, onSelect, onPrevious, onNex
           </span>
           <Icon name="down" size={13} />
         </button>
-        <div className="review-status">
-          <span>
-            {selected + 1} / {files.length}
-          </span>
-          <small>更新 {updated}</small>
-        </div>
-        <button className="next-button" type="button" onClick={onNext} aria-label="次のファイル">
-          <Icon name="chevron" />
+        <button
+          aria-label={`Git操作を開く。${stagedFiles}/${changedFiles}ファイルをステージ済み`}
+          className="git-actions-button dock-git-actions-button"
+          disabled={changedFiles === 0}
+          onClick={onOpenGitActions}
+          type="button"
+        >
+          <Icon name="gitCommit" size={18} />
+          {stagedFiles > 0 ? <span>{stagedFiles}</span> : null}
         </button>
       </footer>
 

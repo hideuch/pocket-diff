@@ -42,9 +42,6 @@ export function App() {
         hasRepositories={Boolean(pocketDiff.repositories?.length)}
         isLoadingRepositories={pocketDiff.repositories === null}
         refreshing={pocketDiff.refreshing}
-        stagedFiles={stagedFiles}
-        changedFiles={changedFiles}
-        onOpenGitActions={() => setGitActionsOpen(true)}
         onOpenRepositoryPicker={() => setPickerOpen(true)}
         onOpenThemePicker={() => setThemePickerOpen(true)}
         onRefresh={() => pocketDiff.loadDiff()}
@@ -62,7 +59,10 @@ export function App() {
           data={pocketDiff.data}
           files={pocketDiff.files}
           selected={pocketDiff.selected}
+          stagedFiles={stagedFiles}
+          changedFiles={changedFiles}
           theme={themeDefinition}
+          onOpenGitActions={() => setGitActionsOpen(true)}
           onSelect={pocketDiff.setSelected}
         />
       ) : null}
