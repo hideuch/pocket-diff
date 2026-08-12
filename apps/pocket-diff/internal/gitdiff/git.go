@@ -23,14 +23,36 @@ type Summary struct {
 }
 
 type Result struct {
-	Repo        string   `json:"repo"`
-	Branch      string   `json:"branch"`
-	Base        string   `json:"base"`
-	Patch       string   `json:"patch"`
-	Revision    string   `json:"revision"`
-	Summary     Summary  `json:"summary"`
-	Skipped     []string `json:"skipped"`
-	GeneratedAt string   `json:"generatedAt"`
+	Repo           string       `json:"repo"`
+	Branch         string       `json:"branch"`
+	Base           string       `json:"base"`
+	Patch          string       `json:"patch"`
+	Revision       string       `json:"revision"`
+	StatusRevision string       `json:"statusRevision"`
+	ChangeToken    string       `json:"changeToken"`
+	Summary        Summary      `json:"summary"`
+	FilesStatus    []FileStatus `json:"filesStatus"`
+	Skipped        []string     `json:"skipped"`
+	GeneratedAt    string       `json:"generatedAt"`
+}
+
+type StatusResult struct {
+	FilesStatus    []FileStatus `json:"filesStatus"`
+	StatusRevision string       `json:"statusRevision"`
+	ChangeToken    string       `json:"changeToken"`
+}
+
+type FileStatus struct {
+	Path         string `json:"path"`
+	PreviousPath string `json:"previousPath,omitempty"`
+	Stage        string `json:"stage"`
+	Kind         string `json:"kind"`
+}
+
+type statusEntry struct {
+	FileStatus
+	IndexCode    byte
+	WorktreeCode byte
 }
 
 type CommandError struct {
@@ -124,12 +146,299 @@ func ReadFileVersion(repositoryPath, name, source string) ([]byte, error) {
 // working-tree changes. It keeps preview endpoints from becoming arbitrary
 // repository file readers when their query parameters are edited directly.
 func IsChangedFile(repositoryPath, name string) bool {
-	cleanName := filepath.ToSlash(filepath.Clean(filepath.FromSlash(name)))
-	if name == "" || cleanName == "." || cleanName == ".." || strings.HasPrefix(cleanName, "../") || filepath.IsAbs(name) {
+	cleanName, err := cleanRepositoryPath(name)
+	if err != nil {
 		return false
 	}
-	status, err := runGit(repositoryPath, false, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", cleanName)
+	status, err := runGit(repositoryPath, false, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", literalPathspec(cleanName))
 	return err == nil && status != ""
+}
+
+func cleanRepositoryPath(name string) (string, error) {
+	cleanName := filepath.ToSlash(filepath.Clean(filepath.FromSlash(name)))
+	if name == "" || cleanName == "." || cleanName == ".." || strings.HasPrefix(cleanName, "../") || filepath.IsAbs(name) {
+		return "", fmt.Errorf("invalid repository path")
+	}
+	return cleanName, nil
+}
+
+func literalPathspec(name string) string {
+	return ":(literal)" + name
+}
+
+func repositoryRoot(repositoryPath string) (string, error) {
+	rootOutput, err := runGit(repositoryPath, false, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(rootOutput), nil
+}
+
+func collectStatus(root string) ([]statusEntry, string, error) {
+	raw, err := runGit(root, false, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	if err != nil {
+		return nil, "", err
+	}
+	parts := strings.Split(raw, "\x00")
+	entries := make([]statusEntry, 0, len(parts))
+	for index := 0; index < len(parts); index++ {
+		entry := parts[index]
+		if len(entry) < 4 {
+			continue
+		}
+		indexCode, worktreeCode := entry[0], entry[1]
+		name := entry[3:]
+		previousName := ""
+		if indexCode == 'R' || indexCode == 'C' || worktreeCode == 'R' || worktreeCode == 'C' {
+			if index+1 < len(parts) {
+				index++
+				previousName = parts[index]
+			}
+		}
+		stage := "unstaged"
+		hasStaged := indexCode != ' ' && indexCode != '?'
+		hasUnstaged := worktreeCode != ' ' && worktreeCode != '?'
+		if hasStaged && hasUnstaged {
+			stage = "partial"
+		} else if hasStaged {
+			stage = "staged"
+		}
+		kind := "modified"
+		switch {
+		case indexCode == '?' && worktreeCode == '?':
+			kind = "untracked"
+		case indexCode == 'R' || worktreeCode == 'R':
+			kind = "renamed"
+		case indexCode == 'A' || worktreeCode == 'A':
+			kind = "added"
+		case indexCode == 'D' || worktreeCode == 'D':
+			kind = "deleted"
+		}
+		entries = append(entries, statusEntry{
+			FileStatus: FileStatus{Path: name, PreviousPath: previousName, Stage: stage, Kind: kind},
+			IndexCode:  indexCode, WorktreeCode: worktreeCode,
+		})
+	}
+	return entries, raw, nil
+}
+
+func Snapshot(repositoryPath string) (StatusResult, error) {
+	root, err := repositoryRoot(repositoryPath)
+	if err != nil {
+		return StatusResult{}, err
+	}
+	return snapshotRoot(root)
+}
+
+func snapshotRoot(root string) (StatusResult, error) {
+	entries, rawStatus, err := collectStatus(root)
+	if err != nil {
+		return StatusResult{}, err
+	}
+	filesStatus := make([]FileStatus, 0, len(entries))
+	var contentState strings.Builder
+	head, _ := runGit(root, false, "rev-parse", "--verify", "HEAD")
+	contentState.WriteString(strings.TrimSpace(head))
+	contentState.WriteByte(0)
+	for _, entry := range entries {
+		filesStatus = append(filesStatus, entry.FileStatus)
+		fmt.Fprintf(&contentState, "%s\x00%s\x00%s\x00", entry.Path, entry.PreviousPath, entry.Kind)
+		appendFileState(&contentState, root, entry.Path)
+		if entry.PreviousPath != "" {
+			appendFileState(&contentState, root, entry.PreviousPath)
+		}
+	}
+	statusHash := sha256.Sum256([]byte(rawStatus))
+	contentHash := sha256.Sum256([]byte(contentState.String()))
+	return StatusResult{
+		FilesStatus:    filesStatus,
+		StatusRevision: hex.EncodeToString(statusHash[:])[:16],
+		ChangeToken:    hex.EncodeToString(contentHash[:])[:16],
+	}, nil
+}
+
+func appendFileState(builder *strings.Builder, root, name string) {
+	if name == "" {
+		return
+	}
+	info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(name)))
+	if err != nil {
+		fmt.Fprintf(builder, "missing:%s\x00", name)
+		return
+	}
+	fmt.Fprintf(builder, "%s:%d:%d:%d\x00", name, info.Size(), info.ModTime().UnixNano(), info.Mode())
+}
+
+func Stage(repositoryPath, name string) error {
+	cleanName, err := cleanRepositoryPath(name)
+	if err != nil {
+		return err
+	}
+	root, err := repositoryRoot(repositoryPath)
+	if err != nil {
+		return err
+	}
+	entries, _, err := collectStatus(root)
+	if err != nil {
+		return err
+	}
+	entry, ok := findStatusEntry(entries, cleanName)
+	if !ok {
+		return fmt.Errorf("file is not part of the working tree changes")
+	}
+	paths := []string{literalPathspec(entry.Path)}
+	if entry.PreviousPath != "" {
+		paths = append(paths, literalPathspec(entry.PreviousPath))
+	}
+	_, err = runGit(root, false, append([]string{"add", "--"}, paths...)...)
+	return err
+}
+
+func StageAll(repositoryPath string) error {
+	root, err := repositoryRoot(repositoryPath)
+	if err != nil {
+		return err
+	}
+	_, err = runGit(root, false, "add", "-A", "--", ".")
+	return err
+}
+
+func Unstage(repositoryPath, name string) error {
+	cleanName, err := cleanRepositoryPath(name)
+	if err != nil {
+		return err
+	}
+	root, err := repositoryRoot(repositoryPath)
+	if err != nil {
+		return err
+	}
+	entries, _, err := collectStatus(root)
+	if err != nil {
+		return err
+	}
+	entry, ok := findStatusEntry(entries, cleanName)
+	if !ok || entry.IndexCode == ' ' || entry.IndexCode == '?' {
+		return fmt.Errorf("file has no staged changes")
+	}
+	paths := []string{literalPathspec(entry.Path)}
+	if entry.PreviousPath != "" {
+		paths = append(paths, literalPathspec(entry.PreviousPath))
+	}
+	if hasHead(root) {
+		_, err = runGit(root, false, append([]string{"restore", "--staged", "--"}, paths...)...)
+		return err
+	}
+	_, err = runGit(root, false, append([]string{"rm", "--cached", "-f", "--ignore-unmatch", "--"}, paths...)...)
+	return err
+}
+
+func UnstageAll(repositoryPath string) error {
+	root, err := repositoryRoot(repositoryPath)
+	if err != nil {
+		return err
+	}
+	if hasHead(root) {
+		_, err = runGit(root, false, "restore", "--staged", "--", ".")
+		return err
+	}
+	_, err = runGit(root, false, "rm", "--cached", "-r", "-f", "--ignore-unmatch", "--", ".")
+	return err
+}
+
+func Discard(repositoryPath, name string) error {
+	cleanName, err := cleanRepositoryPath(name)
+	if err != nil {
+		return err
+	}
+	root, err := repositoryRoot(repositoryPath)
+	if err != nil {
+		return err
+	}
+	entries, _, err := collectStatus(root)
+	if err != nil {
+		return err
+	}
+	entry, ok := findStatusEntry(entries, cleanName)
+	if !ok {
+		return fmt.Errorf("file is not part of the working tree changes")
+	}
+	if entry.IndexCode == '?' && entry.WorktreeCode == '?' {
+		return removeUntracked(root, entry.Path)
+	}
+	paths := []string{literalPathspec(entry.Path)}
+	if entry.PreviousPath != "" {
+		paths = append(paths, literalPathspec(entry.PreviousPath))
+	}
+	if !hasHead(root) {
+		if _, err := runGit(root, false, append([]string{"rm", "--cached", "-f", "--ignore-unmatch", "--"}, paths...)...); err != nil {
+			return err
+		}
+		if err := removeUntracked(root, entry.Path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	_, err = runGit(root, false, append([]string{"restore", "--source=HEAD", "--staged", "--worktree", "--"}, paths...)...)
+	return err
+}
+
+func Commit(repositoryPath, message string) error {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return fmt.Errorf("commit message is required")
+	}
+	if len(message) > 4096 {
+		return fmt.Errorf("commit message is too long")
+	}
+	root, err := repositoryRoot(repositoryPath)
+	if err != nil {
+		return err
+	}
+	entries, _, err := collectStatus(root)
+	if err != nil {
+		return err
+	}
+	hasStaged := false
+	for _, entry := range entries {
+		if entry.IndexCode != ' ' && entry.IndexCode != '?' {
+			hasStaged = true
+			break
+		}
+	}
+	if !hasStaged {
+		return fmt.Errorf("there are no staged changes")
+	}
+	_, err = runGit(root, false, "commit", "-m", message)
+	return err
+}
+
+func findStatusEntry(entries []statusEntry, name string) (statusEntry, bool) {
+	for _, entry := range entries {
+		if entry.Path == name || entry.PreviousPath == name {
+			return entry, true
+		}
+	}
+	return statusEntry{}, false
+}
+
+func removeUntracked(root, name string) error {
+	cleanName, err := cleanRepositoryPath(name)
+	if err != nil {
+		return err
+	}
+	candidate := filepath.Join(root, filepath.FromSlash(cleanName))
+	relative, err := filepath.Rel(root, candidate)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+		return fmt.Errorf("file is outside the repository")
+	}
+	info, err := os.Lstat(candidate)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() && info.Mode()&os.ModeSymlink == 0 {
+		return fmt.Errorf("only files can be discarded")
+	}
+	return os.Remove(candidate)
 }
 
 func CountPatch(patch string) Summary {
@@ -195,11 +504,10 @@ func untrackedPatch(root string) (string, []string, error) {
 }
 
 func Collect(repositoryPath string) (Result, error) {
-	rootOutput, err := runGit(repositoryPath, false, "rev-parse", "--show-toplevel")
+	root, err := repositoryRoot(repositoryPath)
 	if err != nil {
 		return Result{}, err
 	}
-	root := strings.TrimSpace(rootOutput)
 	branch, err := runGit(root, false, "branch", "--show-current")
 	if err != nil {
 		return Result{}, err
@@ -231,10 +539,15 @@ func Collect(repositoryPath string) (Result, error) {
 		return Result{}, err
 	}
 	patch := strings.Join(nonempty(tracked, untracked), "\n")
+	snapshot, err := snapshotRoot(root)
+	if err != nil {
+		return Result{}, err
+	}
 	hash := sha256.Sum256([]byte(patch))
 	return Result{
 		Repo: filepath.Base(root), Branch: branch, Base: base, Patch: patch,
-		Revision: hex.EncodeToString(hash[:])[:16], Summary: CountPatch(patch),
+		Revision: hex.EncodeToString(hash[:])[:16], StatusRevision: snapshot.StatusRevision,
+		ChangeToken: snapshot.ChangeToken, Summary: CountPatch(patch), FilesStatus: snapshot.FilesStatus,
 		Skipped: skipped, GeneratedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}, nil
 }

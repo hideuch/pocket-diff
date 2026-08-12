@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppHeader } from "./components/AppHeader";
 import { DiffContent } from "./components/DiffContent";
+import { GitActionsSheet } from "./components/GitActionsSheet";
 import { RepositoryPicker } from "./components/RepositoryPicker";
 import { EmptyState, ErrorState } from "./components/StatusStates";
 import { ThemePicker } from "./components/ThemePicker";
@@ -12,12 +13,15 @@ const THEME_STORAGE_KEY = "pocket-diff:theme";
 export function App() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const [gitActionsOpen, setGitActionsOpen] = useState(false);
   const [theme, setTheme] = useState<AppTheme>(() => {
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
     return isAppTheme(stored) ? stored : "light";
   });
   const pocketDiff = usePocketDiff();
-  const themeDefinition = getAppTheme(theme);
+  const themeDefinition = useMemo(() => getAppTheme(theme), [theme]);
+  const stagedFiles = pocketDiff.gitFilesStatus.filter((file) => file.stage !== "unstaged").length;
+  const changedFiles = pocketDiff.gitFilesStatus.length;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -38,6 +42,9 @@ export function App() {
         hasRepositories={Boolean(pocketDiff.repositories?.length)}
         isLoadingRepositories={pocketDiff.repositories === null}
         refreshing={pocketDiff.refreshing}
+        stagedFiles={stagedFiles}
+        changedFiles={changedFiles}
+        onOpenGitActions={() => setGitActionsOpen(true)}
         onOpenRepositoryPicker={() => setPickerOpen(true)}
         onOpenThemePicker={() => setThemePickerOpen(true)}
         onRefresh={() => pocketDiff.loadDiff()}
@@ -71,6 +78,20 @@ export function App() {
       ) : null}
       {themePickerOpen ? (
         <ThemePicker activeTheme={theme} onClose={() => setThemePickerOpen(false)} onSelect={setTheme} />
+      ) : null}
+      {gitActionsOpen && pocketDiff.data ? (
+        <GitActionsSheet
+          branch={pocketDiff.data.branch}
+          busy={pocketDiff.gitBusy}
+          files={pocketDiff.gitFilesStatus}
+          onClose={() => setGitActionsOpen(false)}
+          onCommit={(message) => pocketDiff.mutateGit("commit", { message })}
+          onDiscard={(path) => pocketDiff.mutateGit("discard", { path })}
+          onStage={(path) => pocketDiff.mutateGit("stage", { path })}
+          onStageAll={() => pocketDiff.mutateGit("stage-all", {})}
+          onUnstage={(path) => pocketDiff.mutateGit("unstage", { path })}
+          onUnstageAll={() => pocketDiff.mutateGit("unstage-all", {})}
+        />
       ) : null}
       {pocketDiff.error && pocketDiff.data ? (
         <div className="toast" role="status">

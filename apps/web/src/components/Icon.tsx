@@ -16,6 +16,8 @@ const iconPaths = {
     <path d="M12 3a9 9 0 1 0 0 18h1.5a2 2 0 0 0 0-4H12a2 2 0 0 1 0-4h3a6 6 0 0 0 0-12zM7.5 10h.01M9 6.5h.01M14 6h.01M17.5 9h.01" />
   ),
   trash: <path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" />,
+  gitCommit: <path d="M4 12h5M15 12h5M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />,
+  plus: <path d="M12 5v14M5 12h14" />,
   wrap: <path d="M4 6h16M4 11h12a4 4 0 0 1 0 8h-1M15 16l-3 3 3 3M4 19h5" />,
   chevron: <path d="m9 18 6-6-6-6" />,
   arrow: <path d="m15 18-6-6 6-6" />,

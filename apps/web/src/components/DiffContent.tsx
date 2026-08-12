@@ -1,5 +1,5 @@
 import type { FileDiffMetadata } from "@pierre/diffs";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { DiffResponse } from "../types";
 import type { AppThemeDefinition } from "../themes";
 import { DiffPanel } from "./DiffPanel";
@@ -33,7 +33,7 @@ function storedFileSet(key: string) {
   }
 }
 
-export function DiffContent({ activeRepoId, data, files, selected, theme, onSelect }: DiffContentProps) {
+function DiffContentView({ activeRepoId, data, files, selected, theme, onSelect }: DiffContentProps) {
   const [noWrapFiles, setNoWrapFiles] = useState<Set<string>>(() => storedFileSet(NO_WRAP_FILES_KEY));
   const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(() => new Set());
   const [reviewFileKey, setReviewFileKey] = useState<string | null>(null);
@@ -198,6 +198,8 @@ export function DiffContent({ activeRepoId, data, files, selected, theme, onSele
     </>
   );
 }
+
+export const DiffContent = memo(DiffContentView);
 
 function AllDiffs({
   activeRepoId,

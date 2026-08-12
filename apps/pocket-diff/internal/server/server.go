@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/hideuch/pocket-diff/apps/pocket-diff/internal/catalog"
@@ -21,6 +22,7 @@ type Server struct {
 	catalog  *catalog.Catalog
 	assets   fs.FS
 	basePath string
+	gitMu    sync.Mutex
 }
 
 func New(catalog *catalog.Catalog, assets fs.FS, basePath string) http.Handler {
@@ -84,9 +86,134 @@ func (s *Server) ServeHTTP(response http.ResponseWriter, request *http.Request) 
 	case "/api/file":
 		s.serveFile(response, request)
 		return
+	case "/api/git/status":
+		s.serveGitStatus(response, request)
+		return
+	case "/api/git/stage":
+		s.serveGitMutation(response, request, "stage")
+		return
+	case "/api/git/stage-all":
+		s.serveGitMutation(response, request, "stage-all")
+		return
+	case "/api/git/unstage":
+		s.serveGitMutation(response, request, "unstage")
+		return
+	case "/api/git/unstage-all":
+		s.serveGitMutation(response, request, "unstage-all")
+		return
+	case "/api/git/discard":
+		s.serveGitMutation(response, request, "discard")
+		return
+	case "/api/git/commit":
+		s.serveGitMutation(response, request, "commit")
+		return
 	}
 
 	s.serveAsset(response, request, localPath)
+}
+
+type gitMutationRequest struct {
+	Repo           string `json:"repo"`
+	StatusRevision string `json:"statusRevision"`
+	ChangeToken    string `json:"changeToken"`
+	Path           string `json:"path,omitempty"`
+	Message        string `json:"message,omitempty"`
+}
+
+func (s *Server) serveGitStatus(response http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodGet {
+		response.Header().Set("Allow", "GET")
+		writeJSON(response, http.StatusMethodNotAllowed, map[string]string{"error": "対応していないリクエストです"})
+		return
+	}
+	repositoryPath, ok := s.catalog.Resolve(request.URL.Query().Get("repo"))
+	if !ok {
+		writeJSON(response, http.StatusNotFound, map[string]string{"error": "リポジトリが見つかりません"})
+		return
+	}
+	s.gitMu.Lock()
+	result, err := gitdiff.Snapshot(repositoryPath)
+	s.gitMu.Unlock()
+	if err != nil {
+		writeJSON(response, http.StatusUnprocessableEntity, map[string]string{"error": "Gitの状態を確認できませんでした", "detail": err.Error()})
+		return
+	}
+	response.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(response, http.StatusOK, result)
+}
+
+func (s *Server) serveGitMutation(response http.ResponseWriter, request *http.Request, action string) {
+	if request.Method != http.MethodPost {
+		response.Header().Set("Allow", "POST")
+		writeJSON(response, http.StatusMethodNotAllowed, map[string]string{"error": "対応していないリクエストです"})
+		return
+	}
+	if site := request.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "same-site" && site != "none" {
+		writeJSON(response, http.StatusForbidden, map[string]string{"error": "別のサイトからの操作は許可されていません"})
+		return
+	}
+	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		writeJSON(response, http.StatusUnsupportedMediaType, map[string]string{"error": "JSON形式のリクエストが必要です"})
+		return
+	}
+	request.Body = http.MaxBytesReader(response, request.Body, 16*1024)
+	decoder := json.NewDecoder(request.Body)
+	decoder.DisallowUnknownFields()
+	var input gitMutationRequest
+	if err := decoder.Decode(&input); err != nil {
+		writeJSON(response, http.StatusBadRequest, map[string]string{"error": "操作内容を読み込めませんでした", "detail": err.Error()})
+		return
+	}
+	repositoryPath, ok := s.catalog.Resolve(input.Repo)
+	if !ok {
+		writeJSON(response, http.StatusNotFound, map[string]string{"error": "リポジトリが見つかりません"})
+		return
+	}
+
+	s.gitMu.Lock()
+	defer s.gitMu.Unlock()
+	current, err := gitdiff.Snapshot(repositoryPath)
+	if err != nil {
+		writeJSON(response, http.StatusUnprocessableEntity, map[string]string{"error": "Gitの状態を確認できませんでした", "detail": err.Error()})
+		return
+	}
+	if input.StatusRevision == "" || input.ChangeToken == "" ||
+		input.StatusRevision != current.StatusRevision || input.ChangeToken != current.ChangeToken {
+		writeJSON(response, http.StatusConflict, map[string]string{
+			"error":  "差分が更新されています",
+			"detail": "最新の差分を確認してからもう一度操作してください",
+		})
+		return
+	}
+
+	switch action {
+	case "stage":
+		err = gitdiff.Stage(repositoryPath, input.Path)
+	case "stage-all":
+		err = gitdiff.StageAll(repositoryPath)
+	case "unstage":
+		err = gitdiff.Unstage(repositoryPath, input.Path)
+	case "unstage-all":
+		err = gitdiff.UnstageAll(repositoryPath)
+	case "discard":
+		err = gitdiff.Discard(repositoryPath, input.Path)
+	case "commit":
+		err = gitdiff.Commit(repositoryPath, input.Message)
+	default:
+		err = fmt.Errorf("unsupported git action")
+	}
+	if err != nil {
+		writeJSON(response, http.StatusUnprocessableEntity, map[string]string{"error": "Git操作を完了できませんでした", "detail": err.Error()})
+		return
+	}
+	result, err := gitdiff.Snapshot(repositoryPath)
+	if err != nil {
+		writeJSON(response, http.StatusUnprocessableEntity, map[string]string{"error": "更新後のGit状態を読み込めませんでした", "detail": err.Error()})
+		return
+	}
+	response.Header().Set("Cache-Control", "private, no-store")
+	writeJSON(response, http.StatusOK, result)
 }
 
 const maxTextPreviewBytes = 2 * 1024 * 1024

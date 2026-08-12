@@ -7,6 +7,9 @@ type AppHeaderProps = {
   hasRepositories: boolean;
   isLoadingRepositories: boolean;
   refreshing: boolean;
+  stagedFiles: number;
+  changedFiles: number;
+  onOpenGitActions: () => void;
   onOpenRepositoryPicker: () => void;
   onOpenThemePicker: () => void;
   onRefresh: () => void;
@@ -18,6 +21,9 @@ export function AppHeader({
   hasRepositories,
   isLoadingRepositories,
   refreshing,
+  stagedFiles,
+  changedFiles,
+  onOpenGitActions,
   onOpenRepositoryPicker,
   onOpenThemePicker,
   onRefresh,
@@ -44,6 +50,16 @@ export function AppHeader({
         </span>
       </button>
       <div className="topbar-actions">
+        <button
+          aria-label={`Git操作を開く。${stagedFiles}/${changedFiles}ファイルをステージ済み`}
+          className="git-actions-button"
+          disabled={!activeRepoId || changedFiles === 0}
+          onClick={onOpenGitActions}
+          type="button"
+        >
+          <Icon name="gitCommit" size={17} />
+          {stagedFiles > 0 ? <span>{stagedFiles}</span> : null}
+        </button>
         <button className="theme-button" onClick={onOpenThemePicker} type="button" aria-label="テーマを選ぶ">
           <Icon name="palette" size={17} />
         </button>
