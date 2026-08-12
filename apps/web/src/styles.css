@@ -1064,7 +1064,6 @@ button:focus-visible {
 
 .wrap-toggle,
 .full-file-toggle,
-.copy-path-toggle,
 .file-collapse-toggle {
   width: 29px;
   height: 27px;
@@ -1287,12 +1286,6 @@ button:focus-visible {
     opacity: 0;
     transform: translate(-50%, 12px);
   }
-}
-
-.copy-path-toggle.is-copied {
-  border-color: #a9d8c1;
-  color: #23845a;
-  background: #eaf8f1;
 }
 
 .file-collapse-toggle svg {
@@ -2217,7 +2210,6 @@ button:focus-visible {
 
 .file-heading .wrap-toggle,
 .file-heading .full-file-toggle,
-.file-heading .copy-path-toggle,
 .file-heading .file-collapse-toggle {
   width: 27px;
   height: 25px;
@@ -2338,7 +2330,6 @@ button:focus-visible {
 
 .wrap-toggle,
 .full-file-toggle,
-.copy-path-toggle,
 .file-collapse-toggle,
 .review-comment-composer textarea,
 .comment-cancel-button,

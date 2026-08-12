@@ -109,11 +109,9 @@ export function DiffPanel({
 }: DiffPanelProps) {
   const [bodyMounted, setBodyMounted] = useState(true);
   const [fullFileView, setFullFileView] = useState(false);
-  const [pathCopied, setPathCopied] = useState(false);
   const [selectedLines, setSelectedLines] = useState<SelectedLineRange | null>(null);
   const [selectionComplete, setSelectionComplete] = useState(false);
   const collapseTimer = useRef<number | undefined>(undefined);
-  const copyTimer = useRef<number | undefined>(undefined);
   const isBinary = /^Binary files .+ differ$|^GIT binary patch$/m.test(patchBlock);
   const isImage = isImageFile(file.name);
   const additions = file.hunks.reduce((total, hunk) => total + hunk.additionLines, 0);
@@ -212,21 +210,9 @@ export function DiffPanel({
   useEffect(
     () => () => {
       window.clearTimeout(collapseTimer.current);
-      window.clearTimeout(copyTimer.current);
     },
     [],
   );
-
-  const copyPath = async () => {
-    try {
-      await copyText(file.name);
-      setPathCopied(true);
-      window.clearTimeout(copyTimer.current);
-      copyTimer.current = window.setTimeout(() => setPathCopied(false), 1600);
-    } catch {
-      setPathCopied(false);
-    }
-  };
 
   const toggleExpanded = () => {
     window.clearTimeout(collapseTimer.current);
@@ -302,15 +288,6 @@ export function DiffPanel({
               <Icon name="document" size={15} />
             </button>
           ) : null}
-          <button
-            aria-label={pathCopied ? `${file.name}をコピーしました` : `${file.name}をコピー`}
-            className={`copy-path-toggle ${pathCopied ? "is-copied" : ""}`}
-            onClick={copyPath}
-            title={pathCopied ? "コピーしました" : "ファイルパスをコピー"}
-            type="button"
-          >
-            <Icon name={pathCopied ? "check" : "copy"} size={15} />
-          </button>
           {showsTextDiff || fullFileView ? (
             <button
               aria-label={wrapLines ? "コードの折り返しを無効にする" : "コードの折り返しを有効にする"}
@@ -506,23 +483,6 @@ function getChangeTypeLabel(type: FileDiffMetadata["type"]) {
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
-}
-
-async function copyText(value: string) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value);
-    return;
-  }
-
-  const textarea = document.createElement("textarea");
-  textarea.value = value;
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.append(textarea);
-  textarea.select();
-  const copied = document.execCommand("copy");
-  textarea.remove();
-  if (!copied) throw new Error("Unable to copy file path");
 }
 
 function VirtualizedDiffBody({ children, estimatedHeight }: { children: ReactNode; estimatedHeight: number }) {
