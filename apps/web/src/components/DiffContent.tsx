@@ -16,6 +16,7 @@ type DiffContentProps = {
   stagedFiles: number;
   changedFiles: number;
   theme: AppThemeDefinition;
+  onDiscardLines: (path: string, side: "additions" | "deletions", start: number, end: number) => Promise<void>;
   onOpenGitActions: () => void;
   onSelect: (index: number) => void;
 };
@@ -52,6 +53,7 @@ function DiffContentView({
   stagedFiles,
   changedFiles,
   theme,
+  onDiscardLines,
   onOpenGitActions,
   onSelect,
 }: DiffContentProps) {
@@ -267,6 +269,7 @@ function DiffContentView({
         programmaticScroll={programmaticScroll}
         theme={theme}
         onActive={onSelect}
+        onDiscardLines={onDiscardLines}
         onToggleFile={toggleFile}
         onToggleLineWrap={toggleLineWrap}
         onReviewFileChange={setReviewFileKey}
@@ -333,6 +336,7 @@ function AllDiffs({
   programmaticScroll,
   theme,
   onActive,
+  onDiscardLines,
   onToggleFile,
   onToggleLineWrap,
   onReviewFileChange,
@@ -349,6 +353,7 @@ function AllDiffs({
   programmaticScroll: { current: boolean };
   theme: AppThemeDefinition;
   onActive: (index: number) => void;
+  onDiscardLines: DiffContentProps["onDiscardLines"];
   onToggleFile: (fileKey: string) => void;
   onToggleLineWrap: (fileKey: string) => void;
   onReviewFileChange: (fileKey: string | null) => void;
@@ -399,6 +404,7 @@ function AllDiffs({
             codeTheme={theme.codeTheme}
             codeThemeType={theme.themeType}
             wrapLines={!noWrapFiles.has(fileKey)}
+            onDiscardLines={onDiscardLines}
             onToggleExpanded={() => onToggleFile(fileKey)}
             onToggleLineWrap={() => onToggleLineWrap(fileKey)}
             onActivateReview={() => onReviewFileChange(fileKey)}

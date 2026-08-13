@@ -157,6 +157,52 @@ func TestServerStagesWithRevisionGuard(t *testing.T) {
 	}
 }
 
+func TestServerDiscardsSelectedLines(t *testing.T) {
+	repository := t.TempDir()
+	gitServerTest(t, repository, "init", "-q")
+	gitServerTest(t, repository, "config", "user.name", "Pocket Diff Test")
+	gitServerTest(t, repository, "config", "user.email", "test@example.invalid")
+	if err := os.WriteFile(filepath.Join(repository, "note.txt"), []byte("one\ntwo\nthree\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitServerTest(t, repository, "add", "note.txt")
+	gitServerTest(t, repository, "commit", "-qm", "initial")
+	if err := os.WriteFile(filepath.Join(repository, "note.txt"), []byte("one\nadded\ntwo\nthree\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	repositoryCatalog := catalog.New([]string{repository}, 0)
+	repositories := repositoryCatalog.Scan(true)
+	handler := New(repositoryCatalog, fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}, "/diff")
+	before, err := gitdiff.Collect(repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requestBody, err := json.Marshal(map[string]any{
+		"repo": repositories[0].ID, "statusRevision": before.StatusRevision,
+		"changeToken": before.ChangeToken, "path": "note.txt",
+		"side": "additions", "start": 2, "end": 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/diff/api/git/discard-lines", bytes.NewReader(requestBody))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("unexpected discard-lines response: %d %s", response.Code, response.Body.String())
+	}
+	content, err := os.ReadFile(filepath.Join(repository, "note.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) != "one\ntwo\nthree\n" {
+		t.Fatalf("unexpected file content: %q", content)
+	}
+}
+
 func gitServerTest(t *testing.T, directory string, arguments ...string) {
 	t.Helper()
 	command := exec.Command("git", arguments...)

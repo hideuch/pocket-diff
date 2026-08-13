@@ -1195,6 +1195,38 @@ button:focus-visible {
   box-shadow: 0 0 0 3px rgba(118, 86, 182, 0.12);
 }
 
+.line-discard-button {
+  min-height: 34px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--delete) 55%, var(--line));
+  border-radius: 9px;
+  color: var(--delete);
+  background: color-mix(in srgb, var(--delete) 7%, var(--paper));
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.line-discard-button.is-confirming {
+  color: white;
+  border-color: var(--delete);
+  background: var(--delete);
+}
+
+.line-discard-button:disabled {
+  opacity: 0.6;
+}
+
+.line-discard-error {
+  margin: 0;
+  color: var(--delete);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
 .review-comment-composer footer > small {
   color: #858c99;
   font-size: 9px;

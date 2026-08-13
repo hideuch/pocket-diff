@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -69,9 +71,14 @@ func (e *CommandError) Error() string {
 }
 
 func runGit(directory string, allowDifference bool, args ...string) (string, error) {
+	return runGitInput(directory, allowDifference, "", args...)
+}
+
+func runGitInput(directory string, allowDifference bool, input string, args ...string) (string, error) {
 	command := exec.Command("git", args...)
 	command.Dir = directory
 	command.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+	command.Stdin = strings.NewReader(input)
 	var stdout, stderr bytes.Buffer
 	command.Stdout = &stdout
 	command.Stderr = &stderr
@@ -85,6 +92,8 @@ func runGit(directory string, allowDifference bool, args ...string) (string, err
 	}
 	return "", &CommandError{Command: "git " + strings.Join(args, " "), Stderr: stderr.String(), Err: err}
 }
+
+var hunkHeaderPattern = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
 
 // ReadFileVersion returns a repository file for the image preview endpoint.
 // source must be either "working" or "head". Working-tree symlinks are
@@ -380,6 +389,190 @@ func Discard(repositoryPath, name string) error {
 	}
 	_, err = runGit(root, false, append([]string{"restore", "--source=HEAD", "--staged", "--worktree", "--"}, paths...)...)
 	return err
+}
+
+// DiscardLines restores only changed lines in the selected old or new line range.
+// The reverse patch is also applied to the index when those lines are staged.
+func DiscardLines(repositoryPath, name, side string, start, end int) error {
+	if side != "additions" && side != "deletions" {
+		return fmt.Errorf("invalid diff side")
+	}
+	if start < 1 || end < start {
+		return fmt.Errorf("invalid line range")
+	}
+	cleanName, err := cleanRepositoryPath(name)
+	if err != nil {
+		return err
+	}
+	root, err := repositoryRoot(repositoryPath)
+	if err != nil {
+		return err
+	}
+	if !hasHead(root) {
+		return fmt.Errorf("line discard requires an initial commit")
+	}
+	entries, _, err := collectStatus(root)
+	if err != nil {
+		return err
+	}
+	entry, ok := findStatusEntry(entries, cleanName)
+	if !ok {
+		return fmt.Errorf("file is not part of the working tree changes")
+	}
+
+	var rawPatch string
+	if entry.IndexCode == '?' && entry.WorktreeCode == '?' {
+		rawPatch, err = runGit(root, true, "diff", "--no-index", "--no-ext-diff", "--no-color", "--unified=0", "--", "/dev/null", cleanName)
+	} else {
+		rawPatch, err = runGit(root, false, "diff", "--no-ext-diff", "--no-color", "--unified=0", "HEAD", "--", literalPathspec(entry.Path))
+	}
+	if err != nil {
+		return err
+	}
+	patch, selected := selectedLinePatch(rawPatch, entry.Path, side, start, end)
+	if selected == 0 {
+		return fmt.Errorf("selected range contains no changed lines")
+	}
+	if _, err := runGitInput(root, false, patch, "apply", "--check", "--reverse", "--recount", "--unidiff-zero", "-"); err != nil {
+		return fmt.Errorf("selected lines can no longer be discarded: %w", err)
+	}
+
+	indexApplied := false
+	if _, checkErr := runGitInput(root, false, patch, "apply", "--check", "--cached", "--reverse", "--recount", "--unidiff-zero", "-"); checkErr == nil {
+		if _, err := runGitInput(root, false, patch, "apply", "--cached", "--reverse", "--recount", "--unidiff-zero", "-"); err != nil {
+			return err
+		}
+		indexApplied = true
+	}
+	if _, err := runGitInput(root, false, patch, "apply", "--reverse", "--recount", "--unidiff-zero", "-"); err != nil {
+		if indexApplied {
+			_, _ = runGitInput(root, false, patch, "apply", "--cached", "--recount", "--unidiff-zero", "-")
+		}
+		return err
+	}
+	return nil
+}
+
+type selectedPatchGroup struct {
+	oldStart int
+	newStart int
+	oldLines []string
+	newLines []string
+}
+
+func selectedLinePatch(rawPatch, name, side string, start, end int) (string, int) {
+	var groups []selectedPatchGroup
+	var oldLines, newLines []string
+	blockOldStart, blockNewStart := 0, 0
+	oldLine, newLine := 0, 0
+	selected := 0
+	flush := func() {
+		if len(oldLines) == 0 && len(newLines) == 0 {
+			return
+		}
+		selectionStart := blockNewStart
+		selectionLength := len(newLines)
+		if side == "deletions" {
+			selectionStart = blockOldStart
+			selectionLength = len(oldLines)
+		}
+		first := max(start-selectionStart, 0)
+		last := min(end-selectionStart, selectionLength-1)
+		if first <= last {
+			group := selectedPatchGroup{
+				oldStart: blockOldStart + min(first, len(oldLines)),
+				newStart: blockNewStart + min(first, len(newLines)),
+			}
+			if first < len(oldLines) {
+				group.oldLines = append(group.oldLines, oldLines[first:min(last+1, len(oldLines))]...)
+			}
+			if first < len(newLines) {
+				group.newLines = append(group.newLines, newLines[first:min(last+1, len(newLines))]...)
+			}
+			groups = append(groups, group)
+			selected += last - first + 1
+		}
+		oldLines = nil
+		newLines = nil
+	}
+	for _, line := range strings.Split(rawPatch, "\n") {
+		if match := hunkHeaderPattern.FindStringSubmatch(line); match != nil {
+			flush()
+			oldLine, _ = strconv.Atoi(match[1])
+			newLine, _ = strconv.Atoi(match[3])
+			continue
+		}
+		if oldLine == 0 && newLine == 0 {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++"):
+			if len(oldLines) == 0 && len(newLines) == 0 {
+				blockOldStart, blockNewStart = oldLine, newLine
+			}
+			newLines = append(newLines, line)
+			newLine++
+		case strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---"):
+			if len(oldLines) == 0 && len(newLines) == 0 {
+				blockOldStart, blockNewStart = oldLine, newLine
+			}
+			oldLines = append(oldLines, line)
+			oldLine++
+		case strings.HasPrefix(line, " "):
+			flush()
+			oldLine++
+			newLine++
+		default:
+			flush()
+		}
+	}
+	flush()
+	if len(groups) == 0 {
+		return "", 0
+	}
+	oldPath := quotePatchPath("a", name)
+	newPath := quotePatchPath("b", name)
+	deletedMode := ""
+	for _, line := range strings.Split(rawPatch, "\n") {
+		if strings.HasPrefix(line, "deleted file mode ") {
+			deletedMode = strings.TrimPrefix(line, "deleted file mode ")
+			break
+		}
+	}
+	var patch strings.Builder
+	fmt.Fprintf(&patch, "diff --git %s %s\n", oldPath, newPath)
+	if deletedMode != "" {
+		fmt.Fprintf(&patch, "deleted file mode %s\n--- %s\n+++ /dev/null\n", deletedMode, oldPath)
+	} else {
+		fmt.Fprintf(&patch, "--- %s\n+++ %s\n", oldPath, newPath)
+	}
+	for _, group := range groups {
+		fmt.Fprintf(
+			&patch,
+			"@@ -%d,%d +%d,%d @@\n",
+			group.oldStart,
+			len(group.oldLines),
+			group.newStart,
+			len(group.newLines),
+		)
+		for _, line := range group.oldLines {
+			patch.WriteString(line)
+			patch.WriteByte('\n')
+		}
+		for _, line := range group.newLines {
+			patch.WriteString(line)
+			patch.WriteByte('\n')
+		}
+	}
+	return patch.String(), selected
+}
+
+func quotePatchPath(prefix, name string) string {
+	path := prefix + "/" + filepath.ToSlash(name)
+	if strings.ContainsAny(path, "\t\n\r\\\"") {
+		return strconv.Quote(path)
+	}
+	return path
 }
 
 func Commit(repositoryPath, message string) error {

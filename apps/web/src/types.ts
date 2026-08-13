@@ -29,7 +29,22 @@ export type GitFileStatus = {
   kind: "modified" | "added" | "deleted" | "renamed" | "untracked";
 };
 
-export type GitMutationAction = "stage" | "stage-all" | "unstage" | "unstage-all" | "discard" | "commit";
+export type GitMutationAction =
+  | "stage"
+  | "stage-all"
+  | "unstage"
+  | "unstage-all"
+  | "discard"
+  | "discard-lines"
+  | "commit";
+
+export type GitMutationInput = {
+  path?: string;
+  message?: string;
+  side?: "additions" | "deletions";
+  start?: number;
+  end?: number;
+};
 
 export type GitStatusResponse = {
   filesStatus: GitFileStatus[];

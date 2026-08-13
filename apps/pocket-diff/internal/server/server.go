@@ -104,6 +104,9 @@ func (s *Server) ServeHTTP(response http.ResponseWriter, request *http.Request) 
 	case "/api/git/discard":
 		s.serveGitMutation(response, request, "discard")
 		return
+	case "/api/git/discard-lines":
+		s.serveGitMutation(response, request, "discard-lines")
+		return
 	case "/api/git/commit":
 		s.serveGitMutation(response, request, "commit")
 		return
@@ -118,6 +121,9 @@ type gitMutationRequest struct {
 	ChangeToken    string `json:"changeToken"`
 	Path           string `json:"path,omitempty"`
 	Message        string `json:"message,omitempty"`
+	Side           string `json:"side,omitempty"`
+	Start          int    `json:"start,omitempty"`
+	End            int    `json:"end,omitempty"`
 }
 
 func (s *Server) serveGitStatus(response http.ResponseWriter, request *http.Request) {
@@ -198,6 +204,8 @@ func (s *Server) serveGitMutation(response http.ResponseWriter, request *http.Re
 		err = gitdiff.UnstageAll(repositoryPath)
 	case "discard":
 		err = gitdiff.Discard(repositoryPath, input.Path)
+	case "discard-lines":
+		err = gitdiff.DiscardLines(repositoryPath, input.Path, input.Side, input.Start, input.End)
 	case "commit":
 		err = gitdiff.Commit(repositoryPath, input.Message)
 	default:

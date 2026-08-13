@@ -62,6 +62,9 @@ export function App() {
           stagedFiles={stagedFiles}
           changedFiles={changedFiles}
           theme={themeDefinition}
+          onDiscardLines={(path, side, start, end) =>
+            pocketDiff.mutateGit("discard-lines", { path, side, start, end }).then(() => undefined)
+          }
           onOpenGitActions={() => setGitActionsOpen(true)}
           onSelect={pocketDiff.setSelected}
         />

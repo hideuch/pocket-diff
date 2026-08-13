@@ -26,6 +26,7 @@ type DiffPanelProps = {
   revision: string;
   reviewActive: boolean;
   wrapLines: boolean;
+  onDiscardLines: (path: string, side: "additions" | "deletions", start: number, end: number) => Promise<void>;
   onToggleExpanded: () => void;
   onToggleLineWrap: () => void;
   onActivateReview: () => void;
@@ -102,6 +103,7 @@ export function DiffPanel({
   revision,
   reviewActive,
   wrapLines,
+  onDiscardLines,
   onToggleExpanded,
   onToggleLineWrap,
   onActivateReview,
@@ -256,6 +258,15 @@ export function DiffPanel({
     clearSelection();
   };
 
+  const discardLines = async () => {
+    if (!selectedLines) return;
+    const range = normalizeReviewRange(selectedLines);
+    const side = range.endSide || range.side;
+    if (!side) throw new Error("差分側を特定できませんでした");
+    await onDiscardLines(file.name, side, range.start, range.end);
+    clearSelection();
+  };
+
   return (
     <article
       className={`diff-stage diff-file-panel change-${file.type} ${isCurrent ? "is-current" : ""} ${expanded ? "is-expanded" : "is-collapsed"}`}
@@ -332,12 +343,39 @@ export function DiffPanel({
           fileName={file.name}
           range={normalizeReviewRange(selectedLines)}
           view={currentView}
+          onDiscard={
+            currentView === "diff" && selectionContainsChanges(file, normalizeReviewRange(selectedLines))
+              ? discardLines
+              : undefined
+          }
           onCancel={clearSelection}
           onSave={saveComment}
         />
       ) : null}
     </article>
   );
+}
+
+function selectionContainsChanges(file: FileDiffMetadata, range: SelectedLineRange) {
+  const side = range.endSide || range.side;
+  if (!side) return false;
+  for (const hunk of file.hunks) {
+    let additionLine = hunk.additionStart;
+    let deletionLine = hunk.deletionStart;
+    for (const content of hunk.hunkContent) {
+      if (content.type === "context") {
+        additionLine += content.lines;
+        deletionLine += content.lines;
+        continue;
+      }
+      const line = side === "additions" ? additionLine : deletionLine;
+      const count = side === "additions" ? content.additions : content.deletions;
+      if (count > 0 && line <= range.end && line + count - 1 >= range.start) return true;
+      additionLine += content.additions;
+      deletionLine += content.deletions;
+    }
+  }
+  return false;
 }
 
 type FullFileState =

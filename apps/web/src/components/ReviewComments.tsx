@@ -219,23 +219,48 @@ export function ReviewCommentComposer({
   fileName,
   range,
   view,
+  onDiscard,
   onCancel,
   onSave,
 }: {
   fileName: string;
   range: SelectedLineRange;
   view: ReviewCommentView;
+  onDiscard?: () => Promise<void>;
   onCancel: () => void;
   onSave: (body: string) => void;
 }) {
   const [body, setBody] = useState("");
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+  const [discardError, setDiscardError] = useState("");
   const textarea = useRef<HTMLTextAreaElement>(null);
   const save = () => {
     const trimmed = body.trim();
     if (trimmed) onSave(trimmed);
   };
+  const discard = async () => {
+    if (!onDiscard) return;
+    if (!confirmingDiscard) {
+      setConfirmingDiscard(true);
+      return;
+    }
+    setDiscarding(true);
+    setDiscardError("");
+    try {
+      await onDiscard();
+    } catch (error) {
+      setDiscardError(error instanceof Error ? error.message : "選択した変更を破棄できませんでした");
+      setConfirmingDiscard(false);
+      setDiscarding(false);
+    }
+  };
 
-  useEffect(() => textarea.current?.focus(), [range]);
+  useEffect(() => {
+    textarea.current?.focus();
+    setConfirmingDiscard(false);
+    setDiscardError("");
+  }, [range]);
 
   return createPortal(
     <aside className="review-comment-composer" aria-label="選択した行へのコメント">
@@ -251,6 +276,22 @@ export function ReviewCommentComposer({
           <Icon name="close" size={15} />
         </button>
       </header>
+      {onDiscard ? (
+        <button
+          className={`line-discard-button ${confirmingDiscard ? "is-confirming" : ""}`}
+          disabled={discarding}
+          onClick={discard}
+          type="button"
+        >
+          <Icon name="trash" size={14} />
+          {discarding ? "破棄しています" : confirmingDiscard ? "もう一度押して破棄" : "選択した変更を破棄"}
+        </button>
+      ) : null}
+      {discardError ? (
+        <p className="line-discard-error" role="alert">
+          {discardError}
+        </p>
+      ) : null}
       <textarea
         ref={textarea}
         aria-label="コメント"

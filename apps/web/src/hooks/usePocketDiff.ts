@@ -1,6 +1,14 @@
 import { parsePatchFiles } from "@pierre/diffs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ApiError, DiffResponse, GitFileStatus, GitMutationAction, GitStatusResponse, Repository } from "../types";
+import type {
+  ApiError,
+  DiffResponse,
+  GitFileStatus,
+  GitMutationAction,
+  GitMutationInput,
+  GitStatusResponse,
+  Repository,
+} from "../types";
 
 const REFRESH_MS = 3000;
 const LAST_REPO_KEY = "pocket-diff:last-repository";
@@ -132,7 +140,7 @@ export function usePocketDiff() {
   const current = files[selected];
 
   const mutateGit = useCallback(
-    async (action: GitMutationAction, input: { path?: string; message?: string }) => {
+    async (action: GitMutationAction, input: GitMutationInput) => {
       if (!activeRepoId || !statusRevisionRef.current || !changeTokenRef.current) {
         throw new Error("リポジトリが選択されていません");
       }
@@ -171,7 +179,9 @@ export function usePocketDiff() {
         statusRevisionRef.current = next.statusRevision;
         changeTokenRef.current = next.changeToken;
         setGitFilesStatus(next.filesStatus);
-        if (action === "discard" || action === "commit") await loadDiff({ quiet: true, force: true });
+        if (action === "discard" || action === "discard-lines" || action === "commit") {
+          await loadDiff({ quiet: true, force: true });
+        }
         setError("");
         return next;
       } catch (operationError) {

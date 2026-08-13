@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -274,6 +275,112 @@ func TestDiscardRemovesStagedNewFile(t *testing.T) {
 	}
 }
 
+func TestDiscardLinesRemovesAdditionsAndRestoresDeletions(t *testing.T) {
+	repository := t.TempDir()
+	gitTest(t, repository, "init", "-q")
+	gitTest(t, repository, "config", "user.name", "Pocket Diff Test")
+	gitTest(t, repository, "config", "user.email", "test@example.invalid")
+	writeTestFile(t, filepath.Join(repository, "note.txt"), "one\ntwo\nthree\nfour\n")
+	gitTest(t, repository, "add", "note.txt")
+	gitTest(t, repository, "commit", "-qm", "initial")
+	writeTestFile(t, filepath.Join(repository, "note.txt"), "one\nTWO\nthree\nadded\nfour\n")
+
+	if err := DiscardLines(repository, "note.txt", "additions", 2, 2); err != nil {
+		t.Fatal(err)
+	}
+	assertTestFile(t, filepath.Join(repository, "note.txt"), "one\ntwo\nthree\nadded\nfour\n")
+	if err := DiscardLines(repository, "note.txt", "additions", 4, 4); err != nil {
+		t.Fatal(err)
+	}
+	assertTestFile(t, filepath.Join(repository, "note.txt"), "one\ntwo\nthree\nfour\n")
+}
+
+func TestDiscardLinesUpdatesStagedSelectionWithoutLosingOtherChanges(t *testing.T) {
+	repository := t.TempDir()
+	gitTest(t, repository, "init", "-q")
+	gitTest(t, repository, "config", "user.name", "Pocket Diff Test")
+	gitTest(t, repository, "config", "user.email", "test@example.invalid")
+	writeTestFile(t, filepath.Join(repository, "note.txt"), "a\nb\nc\n")
+	gitTest(t, repository, "add", "note.txt")
+	gitTest(t, repository, "commit", "-qm", "initial")
+	writeTestFile(t, filepath.Join(repository, "note.txt"), "A\nb\nextra\nc\n")
+	gitTest(t, repository, "add", "note.txt")
+
+	if err := DiscardLines(repository, "note.txt", "additions", 1, 1); err != nil {
+		t.Fatal(err)
+	}
+	assertTestFile(t, filepath.Join(repository, "note.txt"), "a\nb\nextra\nc\n")
+	cached := gitTestOutput(t, repository, "diff", "--cached", "--unified=0", "--", "note.txt")
+	if strings.Contains(cached, "+A") || !strings.Contains(cached, "+extra") {
+		t.Fatalf("unexpected cached diff after line discard:\n%s", cached)
+	}
+}
+
+func TestDiscardLinesRestoresSingleAndMultipleReplacements(t *testing.T) {
+	repository := t.TempDir()
+	gitTest(t, repository, "init", "-q")
+	gitTest(t, repository, "config", "user.name", "Pocket Diff Test")
+	gitTest(t, repository, "config", "user.email", "test@example.invalid")
+	writeTestFile(t, filepath.Join(repository, "note.txt"), "one\ntwo\nthree\nfour\nfive\nsix\n")
+	gitTest(t, repository, "add", "note.txt")
+	gitTest(t, repository, "commit", "-qm", "initial")
+	writeTestFile(t, filepath.Join(repository, "note.txt"), "one\nTWO\nTHREE\nFOUR\ninserted-a\ninserted-b\nfive\nsix\n")
+
+	if err := DiscardLines(repository, "note.txt", "additions", 2, 2); err != nil {
+		t.Fatal(err)
+	}
+	assertTestFile(t, filepath.Join(repository, "note.txt"), "one\ntwo\nTHREE\nFOUR\ninserted-a\ninserted-b\nfive\nsix\n")
+	if err := DiscardLines(repository, "note.txt", "additions", 3, 6); err != nil {
+		t.Fatal(err)
+	}
+	assertTestFile(t, filepath.Join(repository, "note.txt"), "one\ntwo\nthree\nfour\nfive\nsix\n")
+
+	writeTestFile(t, filepath.Join(repository, "note.txt"), "one\nTWO\nthree\nfour\nfive\nsix\n")
+	if err := DiscardLines(repository, "note.txt", "deletions", 2, 2); err != nil {
+		t.Fatal(err)
+	}
+	assertTestFile(t, filepath.Join(repository, "note.txt"), "one\ntwo\nthree\nfour\nfive\nsix\n")
+}
+
+func TestDiscardLinesRejectsUnchangedRange(t *testing.T) {
+	repository := t.TempDir()
+	gitTest(t, repository, "init", "-q")
+	gitTest(t, repository, "config", "user.name", "Pocket Diff Test")
+	gitTest(t, repository, "config", "user.email", "test@example.invalid")
+	writeTestFile(t, filepath.Join(repository, "note.txt"), "one\ntwo\n")
+	gitTest(t, repository, "add", "note.txt")
+	gitTest(t, repository, "commit", "-qm", "initial")
+	writeTestFile(t, filepath.Join(repository, "note.txt"), "one\nchanged\n")
+
+	if err := DiscardLines(repository, "note.txt", "additions", 1, 1); err == nil {
+		t.Fatal("unchanged range was discarded")
+	}
+	assertTestFile(t, filepath.Join(repository, "note.txt"), "one\nchanged\n")
+}
+
+func TestDiscardLinesSupportsUntrackedAndDeletedFiles(t *testing.T) {
+	repository := t.TempDir()
+	gitTest(t, repository, "init", "-q")
+	gitTest(t, repository, "config", "user.name", "Pocket Diff Test")
+	gitTest(t, repository, "config", "user.email", "test@example.invalid")
+	writeTestFile(t, filepath.Join(repository, "deleted.txt"), "one\ntwo\nthree\n")
+	gitTest(t, repository, "add", "deleted.txt")
+	gitTest(t, repository, "commit", "-qm", "initial")
+	writeTestFile(t, filepath.Join(repository, "untracked.txt"), "first\nremove\nlast\n")
+	if err := os.Remove(filepath.Join(repository, "deleted.txt")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := DiscardLines(repository, "untracked.txt", "additions", 2, 2); err != nil {
+		t.Fatal(err)
+	}
+	assertTestFile(t, filepath.Join(repository, "untracked.txt"), "first\nlast\n")
+	if err := DiscardLines(repository, "deleted.txt", "deletions", 2, 2); err != nil {
+		t.Fatal(err)
+	}
+	assertTestFile(t, filepath.Join(repository, "deleted.txt"), "two\n")
+}
+
 func TestReadFileVersionReadsWorkingTreeAndHead(t *testing.T) {
 	repository := t.TempDir()
 	gitTest(t, repository, "init", "-q")
@@ -380,5 +487,16 @@ func writeTestFile(t *testing.T, filename, content string) {
 	t.Helper()
 	if err := os.WriteFile(filename, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func assertTestFile(t *testing.T, filename, expected string) {
+	t.Helper()
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) != expected {
+		t.Fatalf("unexpected file content:\n%s\nwant:\n%s", content, expected)
 	}
 }
